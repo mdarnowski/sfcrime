@@ -27,12 +27,14 @@ class PostgreSQLManager:
         self.conn = None
         self.cursor = None
 
-    def connect(self, dbname=None):
+    def connect(self, dbname=None, auto_commit=True):
         """
         Connect to the PostgreSQL database.
 
         :param dbname: Name of the database to be connected to (optional)
         :type dbname: str, optional
+        :param auto_commit: sets isolation_level
+        :type auto_commit: bool, optional
         """
         if dbname:
             self.dbname = dbname
@@ -40,7 +42,8 @@ class PostgreSQLManager:
             dbname=self.dbname, user=self.user, password=self.password,
             host=self.host, port=self.port
         )
-        self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        if auto_commit:
+            self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
         self.cursor = self.conn.cursor()
 
     def disconnect(self):
