@@ -170,7 +170,7 @@ def main():
     Main function to execute the script.
     """
     connection_manager = PostgreSQLManager(**db_config)
-    connection_manager.connect()
+    connection_manager.connect(auto_commit=False)
     df = load_data('data/crime_sf.csv')
     insert_data(df, connection_manager)
 
