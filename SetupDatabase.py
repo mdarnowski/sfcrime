@@ -1,4 +1,4 @@
-from PostgreSQLManager import PostgreSQLManager, create_database, create_tables
+from utilities.PostgreSQLManager import PostgreSQLManager, create_database, create_tables
 from config.database import db_config
 
 

@@ -2,7 +2,7 @@ import pandas as pd
 from psycopg2.extras import execute_values
 from tqdm import tqdm
 
-from PostgreSQLManager import PostgreSQLManager
+from utilities.PostgreSQLManager import PostgreSQLManager
 from config.database import db_config
 from utilities.SQL_Loader import getQuery
 
