@@ -157,9 +157,7 @@ def insert_data(df, connection_manager):
             batch_values = prepare_batch_values(batch_df, mappings, date_keys, location_keys, incident_detail_keys)
 
             # Insert the final batch
-            insert_query = """INSERT INTO Incidents 
-                              (Incident_ID, Date_Key, Category_Key, District_Key, Resolution_Key, Location_Key, Incident_Details_Key)
-                              VALUES (%s, %s, %s, %s, %s, %s, %s);"""
+            insert_query = getQueries()['insert_incidents']
             cursor.executemany(insert_query, batch_values)
 
     connection_manager.commit()
