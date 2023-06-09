@@ -1,5 +1,6 @@
 import psycopg2
 import psycopg2.extensions
+from utilities.SQL_Loader import load_sql_queries as getQueries
 
 
 class PostgreSQLManager:
@@ -82,17 +83,15 @@ def create_database(db_manager, dbname):
     :type dbname: str
     """
     db_manager.connect("postgres")
-    query = "SELECT 1 FROM pg_database WHERE datname = %s;"
+    query = getQueries()['check_database_exists'].format(dbname=dbname)
     db_manager.execute(query, (dbname,))
     if db_manager.fetchone():
         # Terminate connections and drop database if exists
-        query = f"""SELECT pg_terminate_backend(pg_stat_activity.pid)
-                    FROM pg_stat_activity
-                    WHERE pg_stat_activity.datname = '{dbname}' AND pid <> pg_backend_pid();"""
+        query = getQueries()['terminate_connections'].format(dbname=dbname)
         db_manager.execute(query)
-        db_manager.execute(f"DROP DATABASE {dbname};")
+        db_manager.execute(getQueries()['drop_database'].format(dbname=dbname))
     # Create a new database
-    db_manager.execute(f"CREATE DATABASE {dbname};")
+    db_manager.execute(getQueries()['create_database'].format(dbname=dbname))
     db_manager.disconnect()
 
 
@@ -107,64 +106,7 @@ def create_tables(db_manager, dbname):
     """
     db_manager.connect(dbname)
     # SQL script for creating tables
-    create_table_script = """CREATE TABLE Date_Dimension (
-    Date_Key SERIAL PRIMARY KEY,
-    Incident_Datetime TIMESTAMP NOT NULL,
-    Incident_Date DATE NOT NULL,
-    Incident_Time TIME NOT NULL,
-    Incident_Year INT NOT NULL,
-    Incident_Day_of_Week VARCHAR(255) NOT NULL,
-    Report_Datetime TIMESTAMP NOT NULL
-);
-
-CREATE TABLE Category_Dimension (
-    Category_Key SERIAL PRIMARY KEY,
-    Incident_Category VARCHAR(255),
-    Incident_Subcategory VARCHAR(255),
-    Incident_Code INT NOT NULL
-);
-
-CREATE TABLE District_Dimension (
-    District_Key SERIAL PRIMARY KEY,
-    Police_District VARCHAR(255) NOT NULL,
-    Analysis_Neighborhood VARCHAR(255)
-);
-
-CREATE TABLE Resolution_Dimension (
-    Resolution_Key SERIAL PRIMARY KEY,
-    Resolution VARCHAR(255) NOT NULL
-);
-
-CREATE TABLE Location_Dimension (
-    Location_Key SERIAL PRIMARY KEY,
-    Latitude FLOAT,
-    Longitude FLOAT
-);
-
-CREATE TABLE Incident_Details_Dimension (
-    Incident_Details_Key SERIAL PRIMARY KEY,
-    Incident_Number INT NOT NULL,
-    Incident_Description TEXT
-);
-
-CREATE TABLE Incidents (
-    Incident_ID BIGSERIAL PRIMARY KEY,
-    Date_Key INT,
-    Category_Key INT,
-    District_Key INT,
-    Resolution_Key INT,
-    Location_Key INT,
-    Incident_Details_Key INT,
-    FOREIGN KEY (Date_Key) REFERENCES Date_Dimension(Date_Key),
-    FOREIGN KEY (Category_Key) REFERENCES Category_Dimension(Category_Key),
-    FOREIGN KEY (District_Key) REFERENCES District_Dimension(District_Key),
-    FOREIGN KEY (Resolution_Key) REFERENCES Resolution_Dimension(Resolution_Key),
-    FOREIGN KEY (Location_Key) REFERENCES Location_Dimension(Location_Key),
-    FOREIGN KEY (Incident_Details_Key) REFERENCES Incident_Details_Dimension(Incident_Details_Key)
-);
-
-"""
-    db_manager.execute(create_table_script)
+    db_manager.execute(getQueries()['create_tables'])
     db_manager.commit()
     db_manager.disconnect()
 

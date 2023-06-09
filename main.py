@@ -4,6 +4,7 @@ from tqdm import tqdm
 
 from PostgreSQLManager import PostgreSQLManager
 from config.database import db_config
+from utilities.SQL_Loader import load_sql_queries as getQueries
 
 
 def load_data(filepath):
@@ -32,14 +33,12 @@ def handle_operations(df, cursor, table_name, key_column, *columns):
     mapping = {}
     unique_df = df[list(columns)].drop_duplicates()
     placeholders = ', '.join(['%s'] * len(columns))
+    conditions = ' AND '.join([f'{col} = %s' for col in columns])
 
-    select_query = f"""SELECT {key_column}
-                       FROM {table_name}
-                       WHERE {' AND '.join([f'{col} = %s' for col in columns])}"""
-
-    insert_query = f"""INSERT INTO {table_name} ({', '.join(columns)})
-                       VALUES ({placeholders})
-                       RETURNING {key_column}"""
+    select_query = getQueries()['handle_operations_select'].format(key_column=key_column, table_name=table_name,
+                                                                   conditions=conditions)
+    insert_query = getQueries()['handle_operations_insert'].format(table_name=table_name, columns=', '.join(columns),
+                                                                   placeholders=placeholders, key_column=key_column)
 
     for record in unique_df.values:
         cursor.execute(select_query, record)
@@ -66,8 +65,7 @@ def insert_batch_returning_key(cursor, table_name, key, columns, values, page_si
     :param page_size: Number of records in each batch.
     :return: List of keys for the inserted records.
     """
-    query = f"""INSERT INTO {table_name} ({', '.join(columns)}) 
-                VALUES %s RETURNING {key}"""
+    query = getQueries()['insert_batch'].format(table_name=table_name, columns=', '.join(columns), key=key)
     execute_values(cursor, query, values, template=None, page_size=page_size)
     return [item[0] for item in cursor.fetchall()]
 
