@@ -72,6 +72,50 @@ def insert_batch_returning_key(cursor, table_name, key, columns, values, page_si
     return [item[0] for item in cursor.fetchall()]
 
 
+def get_mappings(df, cursor):
+    """
+    Get mappings for dimensions.
+
+    :param df: DataFrame containing the data.
+    :param cursor: Database cursor.
+    :return: A dictionary containing mappings for dimensions.
+    """
+    return {
+        'District_Dimension': handle_operations(
+            df, cursor, 'District_Dimension', 'District_Key', 'Police_District', 'Analysis_Neighborhood'
+        ),
+        'Resolution_Dimension': handle_operations(
+            df, cursor, 'Resolution_Dimension', 'Resolution_Key', 'Resolution'
+        ),
+        'Category_Dimension': handle_operations(
+            df, cursor, 'Category_Dimension', 'Category_Key', 'Incident_Category', 'Incident_Subcategory',
+            'Incident_Code'
+        )
+    }
+
+
+def prepare_batch_values(batch_df, mappings, date_keys, location_keys, incident_detail_keys):
+    """
+    Prepare the final batch values for insertion.
+
+    :param batch_df: DataFrame containing the batch data.
+    :param mappings: A dictionary containing mappings for dimensions.
+    :param date_keys: A list containing date keys.
+    :param location_keys: A list containing location keys.
+    :param incident_detail_keys: A list containing incident detail keys.
+    :return: A list of tuples containing batch values.
+    """
+    return [
+        (
+            row.Row_ID, date_keys[idx], mappings['Category_Dimension'][
+                (row.Incident_Category, row.Incident_Subcategory, row.Incident_Code)
+            ], mappings['District_Dimension'][(row.Police_District, row.Analysis_Neighborhood)],
+            mappings['Resolution_Dimension'][(row.Resolution,)], location_keys[idx], incident_detail_keys[idx]
+        )
+        for idx, row in enumerate(batch_df.itertuples(index=False))
+    ]
+
+
 def insert_data(df, connection_manager):
     """
     Insert data from DataFrame into the database.
@@ -80,18 +124,7 @@ def insert_data(df, connection_manager):
     :param connection_manager: Connection manager for the database.
     """
     with connection_manager.cursor as cursor:
-        mappings = {
-            'District_Dimension': handle_operations(
-                df, cursor, 'District_Dimension', 'District_Key', 'Police_District', 'Analysis_Neighborhood'
-            ),
-            'Resolution_Dimension': handle_operations(
-                df, cursor, 'Resolution_Dimension', 'Resolution_Key', 'Resolution'
-            ),
-            'Category_Dimension': handle_operations(
-                df, cursor, 'Category_Dimension', 'Category_Key', 'Incident_Category', 'Incident_Subcategory',
-                'Incident_Code'
-            )
-        }
+        mappings = get_mappings(df, cursor)
 
         batch_size = 10000
         total_rows = df.shape[0]
@@ -103,8 +136,9 @@ def insert_data(df, connection_manager):
             batch_df = df.iloc[start_idx:end_idx]
 
             # Prepare values for batch insertion
-            date_values = batch_df[['Incident_Datetime', 'Incident_Date', 'Incident_Time', 'Incident_Year',
-                                    'Incident_Day_of_Week', 'Report_Datetime']].values.tolist()
+            date_values = batch_df[
+                ['Incident_Datetime', 'Incident_Date', 'Incident_Time', 'Incident_Year', 'Incident_Day_of_Week',
+                 'Report_Datetime']].values.tolist()
             location_values = batch_df[['Latitude', 'Longitude']].values.tolist()
             incident_details_values = batch_df[['Incident_Number', 'Incident_Description']].values.tolist()
 
@@ -122,15 +156,7 @@ def insert_data(df, connection_manager):
                 incident_details_values, batch_size)
 
             # Prepare the final batch values for insertion
-            batch_values = [
-                (
-                    row.Row_ID, date_keys[idx], mappings['Category_Dimension'][
-                        (row.Incident_Category, row.Incident_Subcategory, row.Incident_Code)
-                    ], mappings['District_Dimension'][(row.Police_District, row.Analysis_Neighborhood)],
-                    mappings['Resolution_Dimension'][(row.Resolution,)], location_keys[idx], incident_detail_keys[idx]
-                )
-                for idx, row in enumerate(batch_df.itertuples(index=False))
-            ]
+            batch_values = prepare_batch_values(batch_df, mappings, date_keys, location_keys, incident_detail_keys)
 
             # Insert the final batch
             insert_query = """INSERT INTO Incidents 
