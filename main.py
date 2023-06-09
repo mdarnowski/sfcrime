@@ -169,7 +169,7 @@ def main():
     """
     connection_manager = PostgreSQLManager(**db_config)
     connection_manager.connect()
-    df = load_data('crime_sf.csv')
+    df = load_data('data/crime_sf.csv')
     insert_data(df, connection_manager)
 
 
