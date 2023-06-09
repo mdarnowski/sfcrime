@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from PostgreSQLManager import PostgreSQLManager
 from config.database import db_config
-from utilities.SQL_Loader import load_sql_queries as getQueries
+from utilities.SQL_Loader import getQuery
 
 
 def load_data(filepath):
@@ -35,10 +35,10 @@ def handle_operations(df, cursor, table_name, key_column, *columns):
     placeholders = ', '.join(['%s'] * len(columns))
     conditions = ' AND '.join([f'{col} = %s' for col in columns])
 
-    select_query = getQueries()['handle_operations_select'].format(key_column=key_column, table_name=table_name,
-                                                                   conditions=conditions)
-    insert_query = getQueries()['handle_operations_insert'].format(table_name=table_name, columns=', '.join(columns),
-                                                                   placeholders=placeholders, key_column=key_column)
+    select_query = getQuery('handle_operations_select').format(key_column=key_column, table_name=table_name,
+                                                               conditions=conditions)
+    insert_query = getQuery('handle_operations_insert').format(table_name=table_name, columns=', '.join(columns),
+                                                               placeholders=placeholders, key_column=key_column)
 
     for record in unique_df.values:
         cursor.execute(select_query, record)
@@ -65,7 +65,7 @@ def insert_batch_returning_key(cursor, table_name, key, columns, values, page_si
     :param page_size: Number of records in each batch.
     :return: List of keys for the inserted records.
     """
-    query = getQueries()['insert_batch'].format(table_name=table_name, columns=', '.join(columns), key=key)
+    query = getQuery('insert_batch').format(table_name=table_name, columns=', '.join(columns), key=key)
     execute_values(cursor, query, values, template=None, page_size=page_size)
     return [item[0] for item in cursor.fetchall()]
 
@@ -157,7 +157,7 @@ def insert_data(df, connection_manager):
             batch_values = prepare_batch_values(batch_df, mappings, date_keys, location_keys, incident_detail_keys)
 
             # Insert the final batch
-            insert_query = getQueries()['insert_incidents']
+            insert_query = getQuery('insert_incidents')
             cursor.executemany(insert_query, batch_values)
 
     connection_manager.commit()

@@ -1,12 +1,13 @@
 import os
 
 
-def load_sql_queries(directory="config/sql_queries"):
+def getQuery(queryName, directory="config/sql_queries"):
     """
     Load all SQL queries from files stored in a given directory.
 
+    :param queryName: Name of query that we are looking for
     :param directory: Directory containing the SQL files.
-    :return: Dictionary containing the SQL queries keyed by filename.
+    :return: Query keyed by filename.
     """
     queries = {}
     for filename in os.listdir(directory):
@@ -15,4 +16,4 @@ def load_sql_queries(directory="config/sql_queries"):
                 # Use the filename without extension as the key
                 key = os.path.splitext(filename)[0]
                 queries[key] = file.read()
-    return queries
+    return queries[queryName]

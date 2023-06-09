@@ -1,6 +1,6 @@
 import psycopg2
 import psycopg2.extensions
-from utilities.SQL_Loader import load_sql_queries as getQueries
+from utilities.SQL_Loader import getQuery
 
 
 class PostgreSQLManager:
@@ -83,15 +83,14 @@ def create_database(db_manager, dbname):
     :type dbname: str
     """
     db_manager.connect("postgres")
-    query = getQueries()['check_database_exists'].format(dbname=dbname)
+    query = getQuery('check_database_exists').format(dbname=dbname)
     db_manager.execute(query, (dbname,))
     if db_manager.fetchone():
         # Terminate connections and drop database if exists
-        query = getQueries()['terminate_connections'].format(dbname=dbname)
-        db_manager.execute(query)
-        db_manager.execute(getQueries()['drop_database'].format(dbname=dbname))
+        db_manager.execute(getQuery('terminate_connections').format(dbname=dbname))
+        db_manager.execute(getQuery('drop_database').format(dbname=dbname))
     # Create a new database
-    db_manager.execute(getQueries()['create_database'].format(dbname=dbname))
+    db_manager.execute(getQuery('create_database').format(dbname=dbname))
     db_manager.disconnect()
 
 
@@ -106,7 +105,7 @@ def create_tables(db_manager, dbname):
     """
     db_manager.connect(dbname)
     # SQL script for creating tables
-    db_manager.execute(getQueries()['create_tables'])
+    db_manager.execute(getQuery('create_tables'))
     db_manager.commit()
     db_manager.disconnect()
 

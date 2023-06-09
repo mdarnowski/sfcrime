@@ -1,3 +1,4 @@
+--Create all tables in database
 CREATE TABLE Date_Dimension (
     Date_Key SERIAL PRIMARY KEY,
     Incident_Datetime TIMESTAMP NOT NULL,

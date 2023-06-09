@@ -1,6 +1,7 @@
 from PostgreSQLManager import PostgreSQLManager, create_database, create_tables
 from config.database import db_config
 
+
 def setup_database(user, password, host, port, dbname):
     """
     Set up a PostgreSQL database with the given configuration.

@@ -1,3 +1,6 @@
+"""
+    Database configuration
+"""
 db_config = {
     "user": "postgres",
     "password": "sa",
