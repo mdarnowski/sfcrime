@@ -25,6 +25,7 @@ class PostgreSQLManager:
         self.port = port
         self.dbname = dbname
         self.conn = None
+        self.cursor = None
 
     def connect(self, dbname=None, auto_commit=True):
         """
@@ -43,10 +44,13 @@ class PostgreSQLManager:
         )
         if auto_commit:
             self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        self.cursor = self.conn.cursor()
 
 
     def disconnect(self):
         """Disconnect from the PostgreSQL database."""
+        if self.cursor:
+            self.cursor.close()
         if self.conn:
             self.conn.close()
 
