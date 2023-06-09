@@ -73,15 +73,9 @@ class Incidents(Base):
     incident_details_key = Column(Integer, ForeignKey('incident_details_dimension.incident_details_key'))
 
 
-# import other table classes here...
-
-# The declarative_base from one of the imported files can be reused
-
-
-# Creating engine and tables
-engine = create_engine('postgresql://postgres:sa@localhost/crime_data_sf')
-
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
-session.commit()
+def create_tables(dbname):
+    engine = create_engine('postgresql://postgres:sa@localhost/{}'.format(dbname))
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)
+    session = session()
+    session.commit()
