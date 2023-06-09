@@ -1,5 +1,5 @@
 from PostgreSQLManager import PostgreSQLManager, create_database, create_tables
-
+from config.database import db_config
 
 def setup_database(user, password, host, port, dbname):
     """
@@ -23,12 +23,5 @@ def setup_database(user, password, host, port, dbname):
 
 
 if __name__ == "__main__":
-    # Configuration
-    USER = 'postgres'
-    PASSWORD = 'sa'
-    HOST = '127.0.0.1'
-    PORT = '5432'
-    DB_NAME = 'crime_data_sf'
-
     # Set up the database
-    setup_database(USER, PASSWORD, HOST, PORT, DB_NAME)
+    setup_database(**db_config)
