@@ -16,6 +16,7 @@ def load_data(filepath):
     """
     df = pd.read_csv(filepath)
     df.columns = df.columns.str.replace(' ', '_')
+    df.columns = map(str.lower, df.columns)
     return df.where(pd.notnull(df), None)
 
 
@@ -41,6 +42,7 @@ def handle_operations(df, cursor, table_name, key_column, *columns):
                                                                placeholders=placeholders, key_column=key_column)
 
     for record in unique_df.values:
+        print(select_query)
         cursor.execute(select_query, record)
         result = cursor.fetchone()
 
@@ -79,15 +81,15 @@ def get_mappings(df, cursor):
     :return: A dictionary containing mappings for dimensions.
     """
     return {
-        'District_Dimension': handle_operations(
-            df, cursor, 'District_Dimension', 'District_Key', 'Police_District', 'Analysis_Neighborhood'
+        'district_dimension': handle_operations(
+            df, cursor, 'district_dimension', 'district_Key', 'police_district', 'analysis_neighborhood'
         ),
-        'Resolution_Dimension': handle_operations(
-            df, cursor, 'Resolution_Dimension', 'Resolution_Key', 'Resolution'
+        'resolution_dimension': handle_operations(
+            df, cursor, 'resolution_dimension', 'resolution_key', 'resolution'
         ),
-        'Category_Dimension': handle_operations(
-            df, cursor, 'Category_Dimension', 'Category_Key', 'Incident_Category', 'Incident_Subcategory',
-            'Incident_Code'
+        'category_dimension': handle_operations(
+            df, cursor, 'category_dimension', 'category_key', 'incident_category', 'incident_subcategory',
+            'incident_code'
         )
     }
 
@@ -105,10 +107,10 @@ def prepare_batch_values(batch_df, mappings, date_keys, location_keys, incident_
     """
     return [
         (
-            row.Row_ID, date_keys[idx], mappings['Category_Dimension'][
-                (row.Incident_Category, row.Incident_Subcategory, row.Incident_Code)
-            ], mappings['District_Dimension'][(row.Police_District, row.Analysis_Neighborhood)],
-            mappings['Resolution_Dimension'][(row.Resolution,)], location_keys[idx], incident_detail_keys[idx]
+            row.row_id, date_keys[idx], mappings['category_dimension'][
+                (row.incident_category, row.incident_subcategory, row.incident_code)
+            ], mappings['district_dimension'][(row.police_district, row.analysis_neighborhood)],
+            mappings['resolution_dimension'][(row.resolution,)], location_keys[idx], incident_detail_keys[idx]
         )
         for idx, row in enumerate(batch_df.itertuples(index=False))
     ]
@@ -135,22 +137,22 @@ def insert_data(df, connection_manager):
 
             # Prepare values for batch insertion
             date_values = batch_df[
-                ['Incident_Datetime', 'Incident_Date', 'Incident_Time', 'Incident_Year', 'Incident_Day_of_Week',
-                 'Report_Datetime']].values.tolist()
-            location_values = batch_df[['Latitude', 'Longitude']].values.tolist()
-            incident_details_values = batch_df[['Incident_Number', 'Incident_Description']].values.tolist()
+                ['incident_datetime', 'incident_date', 'incident_time', 'incident_year', 'incident_day_of_week',
+                 'report_datetime']].values.tolist()
+            location_values = batch_df[['latitude', 'longitude']].values.tolist()
+            incident_details_values = batch_df[['incident_number', 'incident_description']].values.tolist()
 
             # Insert batches and get the keys
             date_keys = insert_batch_returning_key(
-                cursor, "date_dimension", "Date_Key",
-                ["Incident_Datetime", "Incident_Date", "Incident_Time", "Incident_Year", "Incident_Day_of_Week",
-                 "Report_Datetime"],
+                cursor, "date_dimension", "date_key",
+                ["incident_datetime", "incident_date", "incident_time", "incident_year", "incident_day_of_week",
+                 "report_datetime"],
                 date_values, batch_size)
             location_keys = insert_batch_returning_key(
-                cursor, "Location_Dimension", "Location_Key", ["Latitude", "Longitude"], location_values, batch_size)
+                cursor, "location_dimension", "location_key", ["latitude", "longitude"], location_values, batch_size)
             incident_detail_keys = insert_batch_returning_key(
-                cursor, "Incident_Details_Dimension", "Incident_Details_Key",
-                ["Incident_Number", "Incident_Description"],
+                cursor, "incident_details_dimension", "incident_details_key",
+                ["incident_number", "incident_description"],
                 incident_details_values, batch_size)
 
             # Prepare the final batch values for insertion

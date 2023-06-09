@@ -1,2 +1,1 @@
-INSERT INTO Incidents (Incident_ID, Date_Key, Category_Key, District_Key, Resolution_Key, Location_Key, Incident_Details_Key)
-VALUES (%s, %s, %s, %s, %s, %s, %s);
+INSERT INTO incidents (incident_id, date_key, category_key, district_key, resolution_key, location_key, incident_details_key) VALUES (%s, %s, %s, %s, %s, %s, %s);
