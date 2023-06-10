@@ -1,10 +1,9 @@
 import pandas as pd
 from tqdm import tqdm
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey, insert
-from sqlalchemy.orm import sessionmaker, mapper, relationship, registry, class_mapper
-from utilities.SQL_Loader import getQuery
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.orm import sessionmaker, registry, class_mapper
 from config.database import db_config
-from SQLAlchemy import Base, DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
+from SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
     LocationDimension, ResolutionDimension, Incidents
 
 
@@ -32,23 +31,18 @@ def get_mappings(session, df, table_class, key_column, *columns):
     :param columns: Columns to be handled.
     :return: A dictionary containing mappings for dimensions.
     """
-    mapping = {}
+    existing_records = session.query(table_class).all()
+    existing_mapping = {tuple(getattr(record, col) for col in columns): getattr(record, key_column) for record in existing_records}
+
     unique_df = df[list(columns)].drop_duplicates()
+    new_records = [dict(zip(columns, row)) for row in unique_df.values if tuple(row) not in existing_mapping]
 
-    for record in unique_df.values:
-        filter_conditions = dict(zip(columns, record))
-        result = session.query(getattr(table_class, key_column)).filter_by(**filter_conditions).first()
+    new_objects = [table_class(**record) for record in new_records]
+    session.add_all(new_objects)
+    session.commit()
 
-        if result is None:
-            new_record = dict(zip(columns, record))
-            obj = table_class(**new_record)
-            session.add(obj)
-            mapping[tuple(record)] = getattr(obj, key_column)
-        else:
-            mapping[tuple(record)] = result[0]
-
-    # Flush once after all records have been added
-    session.flush()
+    new_mapping = {tuple(getattr(obj, col) for col in columns): getattr(obj, key_column) for obj in new_objects}
+    mapping = {**existing_mapping, **new_mapping}
 
     return mapping
 
