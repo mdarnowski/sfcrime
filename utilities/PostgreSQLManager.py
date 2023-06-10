@@ -1,5 +1,5 @@
-import psycopg2
-import psycopg2.extensions
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
 from utilities.SQL_Loader import getQuery
 
 
@@ -19,44 +19,34 @@ class PostgreSQLManager:
         :param dbname: Name of the database to be connected to (optional)
         :type dbname: str, optional
         """
+        self.engine = create_engine(f'postgresql://{user}:{password}@{host}:{port}')
         self.user = user
         self.password = password
         self.host = host
         self.port = port
         self.dbname = dbname
-        self.conn = None
-        self.cursor = None
+        self.session = None
 
-    def connect(self, dbname=None, auto_commit=True):
+    def connect(self, dbname=None):
         """
         Connect to the PostgreSQL database.
 
         :param dbname: Name of the database to be connected to (optional)
         :type dbname: str, optional
-        :param auto_commit: sets isolation_level
-        :type auto_commit: bool, optional
         """
         if dbname:
             self.dbname = dbname
-        self.conn = psycopg2.connect(
-            dbname=self.dbname, user=self.user, password=self.password,
-            host=self.host, port=self.port
-        )
-        if auto_commit:
-            self.conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        self.cursor = self.conn.cursor()
-
+        conn_string = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.dbname or 'postgres'}"
+        self.engine = create_engine(conn_string)
+        Session = sessionmaker(bind=self.engine)
+        self.session = Session()
 
     def disconnect(self):
         """Disconnect from the PostgreSQL database."""
-        if self.cursor:
-            self.cursor.close()
-        if self.conn:
-            self.conn.close()
-
-    def getcursor(self):
-        """Get the cursor for the PostgreSQL database."""
-        return self.conn.cursor()
+        if self.session:
+            self.session.close()
+        if self.engine:
+            self.engine.dispose()
 
     def execute(self, query, params=None):
         """
@@ -65,20 +55,21 @@ class PostgreSQLManager:
         :param query: SQL query
         :type query: str
         :param params: Parameters for the SQL query
-        :type params: tuple, optional
+        :type params: dict, optional
         """
         try:
-            self.cursor.execute(query, params) if params else self.cursor.execute(query)
-        except psycopg2.Error as e:
+            result = self.session.execute(text(query), params) if params else self.session.execute(text(query))
+            return result
+        except Exception as e:
             print(f"An error occurred: {e}")
 
     def fetchone(self):
         """Fetch the next row of a query result set."""
-        return self.cursor.fetchone()
+        return self.session.fetchone()
 
     def commit(self):
         """Commit the current transaction."""
-        self.conn.commit()
+        self.session.commit()
 
 
 def create_database(db_manager, dbname):
@@ -92,11 +83,18 @@ def create_database(db_manager, dbname):
     """
     db_manager.connect("postgres")
     query = getQuery('check_database_exists').format(dbname=dbname)
-    db_manager.execute(query, (dbname,))
-    if db_manager.fetchone():
+    result = db_manager.execute(query, {'dbname': dbname})
+
+    if result.fetchone():
         # Terminate connections and drop database if exists
-        db_manager.execute(getQuery('terminate_connections').format(dbname=dbname))
-        db_manager.execute(getQuery('drop_database').format(dbname=dbname))
+        terminate_connections_query = getQuery('terminate_connections').format(dbname=dbname)
+        drop_database_query = getQuery('drop_database').format(dbname=dbname)
+
+        # Using engine to execute the DROP DATABASE command
+        with db_manager.engine.connect() as connection:
+            connection.execution_options(isolation_level="AUTOCOMMIT").execute(terminate_connections_query)
+            connection.execution_options(isolation_level="AUTOCOMMIT").execute(drop_database_query)
+
     # Create a new database
     db_manager.execute(getQuery('create_database').format(dbname=dbname))
     db_manager.disconnect()
@@ -116,9 +114,4 @@ def create_tables(db_manager, dbname):
     db_manager.execute(getQuery('create_tables'))
     db_manager.commit()
     db_manager.disconnect()
-
-
-
-
-
 
