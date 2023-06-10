@@ -1,6 +1,6 @@
-from utilities.PostgreSQLManager import PostgreSQLManager, create_database
+from model import SQLAlchemy
+from utilities.PostgreSQLManager import PostgreSQLManager
 from config.database import db_config
-from SQLAlchemy import create_tables
 
 
 def setup_database(user, password, host, port, dbname):
@@ -18,10 +18,9 @@ def setup_database(user, password, host, port, dbname):
     :param dbname: Name of the database to be set up
     :type dbname: str
     """
-    db_manager = PostgreSQLManager(user, password, host, port)
-
-    create_database(db_manager, dbname)
-    create_tables(dbname)
+    db_manager = PostgreSQLManager(user, password, host, port, dbname)
+    db_manager.create_database()
+    db_manager.create_tables(SQLAlchemy.get_base())
 
 
 if __name__ == "__main__":

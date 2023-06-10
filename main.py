@@ -1,10 +1,9 @@
 import pandas as pd
 from tqdm import tqdm
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey, insert
-from sqlalchemy.orm import sessionmaker, mapper, relationship, registry, class_mapper
-from utilities.SQL_Loader import getQuery
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.orm import sessionmaker, registry, class_mapper
 from config.database import db_config
-from SQLAlchemy import Base, DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
+from model.SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
     LocationDimension, ResolutionDimension, Incidents
 
 

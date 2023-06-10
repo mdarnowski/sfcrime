@@ -1,11 +1,12 @@
-
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 import sqlalchemy
 from sqlalchemy import Column, Integer, String, TIMESTAMP, DATE, TIME, FLOAT, ForeignKey, INT, TEXT
 
-
 Base = sqlalchemy.orm.declarative_base()
+
+
+def get_base():
+    return Base
 
 
 class DateDimension(Base):
@@ -71,11 +72,3 @@ class Incidents(Base):
     resolution_key = Column(Integer, ForeignKey('resolution_dimension.resolution_key'))
     location_key = Column(Integer, ForeignKey('location_dimension.location_key'))
     incident_details_key = Column(Integer, ForeignKey('incident_details_dimension.incident_details_key'))
-
-
-def create_tables(dbname):
-    engine = create_engine('postgresql://postgres:sa@localhost/{}'.format(dbname))
-    Base.metadata.create_all(engine)
-    session = sessionmaker(bind=engine)
-    session = session()
-    session.commit()
