@@ -1,10 +1,10 @@
 import pandas as pd
-from psycopg2.extras import execute_values
+from sqlalchemy import create_engine, MetaData
+from sqlalchemy.orm import sessionmaker, registry, class_mapper
 from tqdm import tqdm
-
-from utilities.PostgreSQLManager import PostgreSQLManager
+from SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
+    LocationDimension, ResolutionDimension, Incidents
 from config.database import db_config
-from utilities.SQL_Loader import getQuery
 
 
 def load_data(filepath):
@@ -16,161 +16,153 @@ def load_data(filepath):
     """
     df = pd.read_csv(filepath)
     df.columns = df.columns.str.replace(' ', '_')
+    df.columns = map(str.lower, df.columns)
     return df.where(pd.notnull(df), None)
 
 
-def handle_operations(df, cursor, table_name, key_column, *columns):
+def get_mappings(session, df, table_class, key_column, *columns):
     """
-    Handles database operations to avoid duplication.
+    Get mappings for dimensions.
 
+    :param session: SQLAlchemy session.
     :param df: DataFrame containing the data.
-    :param cursor: Database cursor.
-    :param table_name: Name of the table in the database.
+    :param table_class: ORM class for the table.
     :param key_column: The key column in the table.
     :param columns: Columns to be handled.
-    :return: A mapping of records to their keys.
+    :return: A dictionary containing mappings for dimensions.
     """
-    mapping = {}
+    existing_records = session.query(table_class).all()
+    existing_mapping = {tuple(getattr(record, col) for col in columns): getattr(record, key_column) for record in
+                        existing_records}
+
     unique_df = df[list(columns)].drop_duplicates()
-    placeholders = ', '.join(['%s'] * len(columns))
-    conditions = ' AND '.join([f'{col} = %s' for col in columns])
+    new_records = [dict(zip(columns, row)) for row in unique_df.values if tuple(row) not in existing_mapping]
 
-    select_query = getQuery('handle_operations_select').format(key_column=key_column, table_name=table_name,
-                                                               conditions=conditions)
-    insert_query = getQuery('handle_operations_insert').format(table_name=table_name, columns=', '.join(columns),
-                                                               placeholders=placeholders, key_column=key_column)
+    new_objects = [table_class(**record) for record in new_records]
+    session.add_all(new_objects)
+    session.commit()
 
-    for record in unique_df.values:
-        cursor.execute(select_query, record)
-        result = cursor.fetchone()
-
-        if result is None:
-            cursor.execute(insert_query, record)
-            mapping[tuple(record)] = cursor.fetchone()[0]
-        else:
-            mapping[tuple(record)] = result[0]
+    new_mapping = {tuple(getattr(obj, col) for col in columns): getattr(obj, key_column) for obj in new_objects}
+    mapping = {**existing_mapping, **new_mapping}
 
     return mapping
 
 
-def insert_batch_returning_key(cursor, table_name, key, columns, values, page_size):
+def insert_data(df, engine):
     """
-    Insert a batch of records and return their keys.
-
-    :param cursor: Database cursor.
-    :param table_name: Name of the table in the database.
-    :param key: The key column in the table.
-    :param columns: Columns to be inserted.
-    :param values: Values to be inserted.
-    :param page_size: Number of records in each batch.
-    :return: List of keys for the inserted records.
+    Insert data into the database.  This function will insert data into the dimension tables first, then insert data
+    :param df: Dataframe containing the data.
+    :param engine: Engine to connect to the database.
+    :return:    None
     """
-    query = getQuery('insert_batch').format(table_name=table_name, columns=', '.join(columns), key=key)
-    execute_values(cursor, query, values, template=None, page_size=page_size)
-    return [item[0] for item in cursor.fetchall()]
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
-
-def get_mappings(df, cursor):
-    """
-    Get mappings for dimensions.
-
-    :param df: DataFrame containing the data.
-    :param cursor: Database cursor.
-    :return: A dictionary containing mappings for dimensions.
-    """
-    return {
-        'District_Dimension': handle_operations(
-            df, cursor, 'District_Dimension', 'District_Key', 'Police_District', 'Analysis_Neighborhood'
+    # Define mappings
+    mappings = {
+        'district_dimension': get_mappings(
+            session, df, DistrictDimension, 'district_key', 'police_district', 'analysis_neighborhood'
         ),
-        'Resolution_Dimension': handle_operations(
-            df, cursor, 'Resolution_Dimension', 'Resolution_Key', 'Resolution'
+        'resolution_dimension': get_mappings(
+            session, df, ResolutionDimension, 'resolution_key', 'resolution'
         ),
-        'Category_Dimension': handle_operations(
-            df, cursor, 'Category_Dimension', 'Category_Key', 'Incident_Category', 'Incident_Subcategory',
-            'Incident_Code'
+        'category_dimension': get_mappings(
+            session, df, CategoryDimension, 'category_key', 'incident_category', 'incident_subcategory', 'incident_code'
         )
     }
 
+    # Insert batches
+    batch_size = 10000
+    total_rows = df.shape[0]
+    num_batches = -(-total_rows // batch_size)
 
-def prepare_batch_values(batch_df, mappings, date_keys, location_keys, incident_detail_keys):
-    """
-    Prepare the final batch values for insertion.
+    date_cols = ["incident_datetime", "incident_date", "incident_time", "incident_year", "incident_day_of_week",
+                 "report_datetime"]
+    location_cols = ["latitude", "longitude"]
+    incident_details_cols = ["incident_number", "incident_description"]
 
-    :param batch_df: DataFrame containing the batch data.
-    :param mappings: A dictionary containing mappings for dimensions.
-    :param date_keys: A list containing date keys.
-    :param location_keys: A list containing location keys.
-    :param incident_detail_keys: A list containing incident detail keys.
-    :return: A list of tuples containing batch values.
-    """
-    return [
-        (
-            row.Row_ID, date_keys[idx], mappings['Category_Dimension'][
-                (row.Incident_Category, row.Incident_Subcategory, row.Incident_Code)
-            ], mappings['District_Dimension'][(row.Police_District, row.Analysis_Neighborhood)],
-            mappings['Resolution_Dimension'][(row.Resolution,)], location_keys[idx], incident_detail_keys[idx]
-        )
-        for idx, row in enumerate(batch_df.itertuples(index=False))
-    ]
+    for start_idx in tqdm(range(0, total_rows, batch_size), desc="Inserting rows"):
+        end_idx = start_idx + batch_size
+        batch_df = df.iloc[start_idx:end_idx]
 
+        # Prepare values for batch insertion more efficiently
+        date_values = batch_df[date_cols].to_dict('records')
+        location_values = batch_df[location_cols].to_dict('records')
+        incident_details_values = batch_df[incident_details_cols].to_dict('records')
 
-def insert_data(df, connection_manager):
-    """
-    Insert data from DataFrame into the database.
+        # Bulk insert
+        session.bulk_insert_mappings(class_mapper(DateDimension), date_values)
+        session.bulk_insert_mappings(class_mapper(LocationDimension), location_values)
+        session.bulk_insert_mappings(class_mapper(IncidentDetailsDimension), incident_details_values)
 
-    :param df: DataFrame containing the data.
-    :param connection_manager: Connection manager for the database.
-    """
-    with connection_manager.cursor as cursor:
-        mappings = get_mappings(df, cursor)
+        # Optimizing the way we get the IDs (one possible method)
+        last_date_key = session.query(DateDimension.date_key).order_by(DateDimension.date_key.desc()).first()[0]
+        date_keys = range(last_date_key - len(date_values) + 1, last_date_key + 1)
+        last_location_key = \
+        session.query(LocationDimension.location_key).order_by(LocationDimension.location_key.desc()).first()[0]
+        location_keys = range(last_location_key - len(location_values) + 1, last_location_key + 1)
+        last_incident_details_key = session.query(IncidentDetailsDimension.incident_details_key).order_by(
+            IncidentDetailsDimension.incident_details_key.desc()).first()[0]
+        incident_detail_keys = range(last_incident_details_key - len(incident_details_values) + 1,
+                                     last_incident_details_key + 1)
 
-        batch_size = 10000
-        total_rows = df.shape[0]
-        num_batches = -(-total_rows // batch_size)
+        # Prepare the final batch values for insertion
+        batch_values = [
+            {
+                'row_id': row.row_id,
+                'date_key': date_keys[idx],
+                'category_key': mappings['category_dimension'][
+                    tuple([row.incident_category, row.incident_subcategory, row.incident_code])],
+                'district_key': mappings['district_dimension'][tuple([row.police_district, row.analysis_neighborhood])],
+                'resolution_key': mappings['resolution_dimension'][tuple([row.resolution])],
+                'location_key': location_keys[idx],
+                'incident_details_key': incident_detail_keys[idx]
+            }
 
-        for batch_num in tqdm(range(num_batches), desc="Inserting rows"):
-            start_idx = batch_num * batch_size
-            end_idx = min((batch_num + 1) * batch_size, total_rows)
-            batch_df = df.iloc[start_idx:end_idx]
+            for idx, row in enumerate(batch_df.itertuples(index=False))
+        ]
 
-            # Prepare values for batch insertion
-            date_values = batch_df[
-                ['Incident_Datetime', 'Incident_Date', 'Incident_Time', 'Incident_Year', 'Incident_Day_of_Week',
-                 'Report_Datetime']].values.tolist()
-            location_values = batch_df[['Latitude', 'Longitude']].values.tolist()
-            incident_details_values = batch_df[['Incident_Number', 'Incident_Description']].values.tolist()
-
-            # Insert batches and get the keys
-            date_keys = insert_batch_returning_key(
-                cursor, "date_dimension", "Date_Key",
-                ["Incident_Datetime", "Incident_Date", "Incident_Time", "Incident_Year", "Incident_Day_of_Week",
-                 "Report_Datetime"],
-                date_values, batch_size)
-            location_keys = insert_batch_returning_key(
-                cursor, "Location_Dimension", "Location_Key", ["Latitude", "Longitude"], location_values, batch_size)
-            incident_detail_keys = insert_batch_returning_key(
-                cursor, "Incident_Details_Dimension", "Incident_Details_Key",
-                ["Incident_Number", "Incident_Description"],
-                incident_details_values, batch_size)
-
-            # Prepare the final batch values for insertion
-            batch_values = prepare_batch_values(batch_df, mappings, date_keys, location_keys, incident_detail_keys)
-
-            # Insert the final batch
-            insert_query = getQuery('insert_incidents')
-            cursor.executemany(insert_query, batch_values)
-
-    connection_manager.commit()
+        session.bulk_insert_mappings(class_mapper(Incidents), batch_values)
+        # Close the session
+    session.commit()
+    session.close()
 
 
-def main():
+def main(orm_exc=None):
     """
     Main function to execute the script.
     """
-    connection_manager = PostgreSQLManager(**db_config)
-    connection_manager.connect()
+    # Define engine
+    engine = create_engine(
+        f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['dbname']}")
+
+    # Reflect the tables and map them to the ORM classes
+    meta = MetaData()
+    meta.reflect(bind=engine)
+
+    # Use registry for mapping
+    mapper_registry = registry()
+
+    for class_name, table_name in [('DateDimension', 'date_dimension'),
+                                   ('LocationDimension', 'location_dimension'),
+                                   ('IncidentDetailsDimension', 'incident_details_dimension'),
+                                   ('DistrictDimension', 'district_dimension'),
+                                   ('ResolutionDimension', 'resolution_dimension'),
+                                   ('CategoryDimension', 'category_dimension'),
+                                   ('Incidents', 'incidents')
+                                   ]:
+        orm_class = globals()[class_name]
+        table = meta.tables[table_name]
+        try:
+            # Check if the class is already mapped
+            class_mapper(orm_class)
+        except orm_exc.UnmappedClassError:
+            # If not, map it
+            mapper_registry.map_imperatively(orm_class, table)
+
+    # Load data and insert it into the database
     df = load_data('data/crime_sf.csv')
-    insert_data(df, connection_manager)
+    insert_data(df, engine)
 
 
 if __name__ == "__main__":

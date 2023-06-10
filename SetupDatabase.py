@@ -1,5 +1,6 @@
-from utilities.PostgreSQLManager import PostgreSQLManager, create_database, create_tables
+from utilities.PostgreSQLManager import PostgreSQLManager, create_database
 from config.database import db_config
+from SQLAlchemy import create_tables
 
 
 def setup_database(user, password, host, port, dbname):
@@ -20,7 +21,7 @@ def setup_database(user, password, host, port, dbname):
     db_manager = PostgreSQLManager(user, password, host, port)
 
     create_database(db_manager, dbname)
-    create_tables(db_manager, dbname)
+    create_tables(dbname)
 
 
 if __name__ == "__main__":
