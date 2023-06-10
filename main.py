@@ -1,10 +1,11 @@
 import pandas as pd
-from sqlalchemy import create_engine, MetaData
-from sqlalchemy.orm import sessionmaker, registry, class_mapper
 from tqdm import tqdm
-from SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
-    LocationDimension, ResolutionDimension, Incidents
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey, insert
+from sqlalchemy.orm import sessionmaker, mapper, relationship, registry, class_mapper
+from utilities.SQL_Loader import getQuery
 from config.database import db_config
+from SQLAlchemy import Base, DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
+    LocationDimension, ResolutionDimension, Incidents
 
 
 def load_data(filepath):
