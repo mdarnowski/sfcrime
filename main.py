@@ -1,9 +1,10 @@
 import pandas as pd
 from tqdm import tqdm
-from sqlalchemy import create_engine, MetaData
-from sqlalchemy.orm import sessionmaker, registry, class_mapper
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey, insert
+from sqlalchemy.orm import sessionmaker, mapper, relationship, registry, class_mapper
+from utilities.SQL_Loader import getQuery
 from config.database import db_config
-from SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
+from SQLAlchemy import Base, DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
     LocationDimension, ResolutionDimension, Incidents
 
 
@@ -32,7 +33,8 @@ def get_mappings(session, df, table_class, key_column, *columns):
     :return: A dictionary containing mappings for dimensions.
     """
     existing_records = session.query(table_class).all()
-    existing_mapping = {tuple(getattr(record, col) for col in columns): getattr(record, key_column) for record in existing_records}
+    existing_mapping = {tuple(getattr(record, col) for col in columns): getattr(record, key_column) for record in
+                        existing_records}
 
     unique_df = df[list(columns)].drop_duplicates()
     new_records = [dict(zip(columns, row)) for row in unique_df.values if tuple(row) not in existing_mapping]
@@ -49,10 +51,10 @@ def get_mappings(session, df, table_class, key_column, *columns):
 
 def insert_data(df, engine):
     """
-    Insert data from DataFrame into the database.
-
-    :param df: DataFrame containing the data.
-    :param engine: SQLAlchemy engine.
+    Insert data into the database.  This function will insert data into the dimension tables first, then insert data
+    :param df: Dataframe containing the data.
+    :param engine: Engine to connect to the database.
+    :return:    None
     """
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -75,55 +77,56 @@ def insert_data(df, engine):
     total_rows = df.shape[0]
     num_batches = -(-total_rows // batch_size)
 
-    # Precompile the column names
-    date_cols = ["incident_datetime", "incident_date", "incident_time", "incident_year", "incident_day_of_week", "report_datetime"]
+    date_cols = ["incident_datetime", "incident_date", "incident_time", "incident_year", "incident_day_of_week",
+                 "report_datetime"]
     location_cols = ["latitude", "longitude"]
     incident_details_cols = ["incident_number", "incident_description"]
 
-    for batch_num in tqdm(range(num_batches), desc="Inserting rows"):
-        start_idx = batch_num * batch_size
-        end_idx = min((batch_num + 1) * batch_size, total_rows)
+    for start_idx in tqdm(range(0, total_rows, batch_size), desc="Inserting rows"):
+        end_idx = start_idx + batch_size
         batch_df = df.iloc[start_idx:end_idx]
 
-        # Prepare values for batch insertion
-        date_values = [dict(zip(date_cols, record)) for record in batch_df[date_cols].values.tolist()]
-        location_values = [dict(zip(location_cols, record)) for record in batch_df[location_cols].values.tolist()]
-        incident_details_values = [dict(zip(incident_details_cols, record)) for record in batch_df[incident_details_cols].values.tolist()]
+        # Prepare values for batch insertion more efficiently
+        date_values = batch_df[date_cols].to_dict('records')
+        location_values = batch_df[location_cols].to_dict('records')
+        incident_details_values = batch_df[incident_details_cols].to_dict('records')
 
         # Bulk insert
-        session.bulk_insert_mappings(DateDimension, date_values)
-        session.bulk_insert_mappings(LocationDimension, location_values)
-        session.bulk_insert_mappings(IncidentDetailsDimension, incident_details_values)
+        session.bulk_insert_mappings(class_mapper(DateDimension), date_values)
+        session.bulk_insert_mappings(class_mapper(LocationDimension), location_values)
+        session.bulk_insert_mappings(class_mapper(IncidentDetailsDimension), incident_details_values)
 
-        # Query the recently inserted IDs
-        date_keys = session.query(DateDimension.date_key).order_by(DateDimension.date_key.desc()).limit(len(date_values)).all()
-        location_keys = session.query(LocationDimension.location_key).order_by(LocationDimension.location_key.desc()).limit(len(location_values)).all()
-        incident_detail_keys = session.query(IncidentDetailsDimension.incident_details_key).order_by(IncidentDetailsDimension.incident_details_key.desc()).limit(len(incident_details_values)).all()
-
-        # Reverse the keys because we queried in descending order
-        date_keys = list(reversed(date_keys))
-        location_keys = list(reversed(location_keys))
-        incident_detail_keys = list(reversed(incident_detail_keys))
+        # Optimizing the way we get the IDs (one possible method)
+        last_date_key = session.query(DateDimension.date_key).order_by(DateDimension.date_key.desc()).first()[0]
+        date_keys = range(last_date_key - len(date_values) + 1, last_date_key + 1)
+        last_location_key = \
+        session.query(LocationDimension.location_key).order_by(LocationDimension.location_key.desc()).first()[0]
+        location_keys = range(last_location_key - len(location_values) + 1, last_location_key + 1)
+        last_incident_details_key = session.query(IncidentDetailsDimension.incident_details_key).order_by(
+            IncidentDetailsDimension.incident_details_key.desc()).first()[0]
+        incident_detail_keys = range(last_incident_details_key - len(incident_details_values) + 1,
+                                     last_incident_details_key + 1)
 
         # Prepare the final batch values for insertion
         batch_values = [
             {
                 'row_id': row.row_id,
-                'date_key': date_keys[idx][0],
-                'category_key': mappings['category_dimension'][tuple([row.incident_category, row.incident_subcategory, row.incident_code])],
+                'date_key': date_keys[idx],
+                'category_key': mappings['category_dimension'][
+                    tuple([row.incident_category, row.incident_subcategory, row.incident_code])],
                 'district_key': mappings['district_dimension'][tuple([row.police_district, row.analysis_neighborhood])],
                 'resolution_key': mappings['resolution_dimension'][tuple([row.resolution])],
-                'location_key': location_keys[idx][0],
-                'incident_details_key': incident_detail_keys[idx][0]
+                'location_key': location_keys[idx],
+                'incident_details_key': incident_detail_keys[idx]
             }
+
             for idx, row in enumerate(batch_df.itertuples(index=False))
         ]
 
-        # Use bulk_insert_mappings for final batch insert
-        session.bulk_insert_mappings(Incidents, batch_values)
-
-        # Commit the changes
-        session.commit()
+        session.bulk_insert_mappings(class_mapper(Incidents), batch_values)
+        # Close the session
+    session.commit()
+    session.close()
 
 
 def main(orm_exc=None):
@@ -146,7 +149,9 @@ def main(orm_exc=None):
                                    ('IncidentDetailsDimension', 'incident_details_dimension'),
                                    ('DistrictDimension', 'district_dimension'),
                                    ('ResolutionDimension', 'resolution_dimension'),
-                                   ('CategoryDimension', 'category_dimension')]:
+                                   ('CategoryDimension', 'category_dimension'),
+                                   ('Incidents', 'incidents')
+                                   ]:
         orm_class = globals()[class_name]
         table = meta.tables[table_name]
         try:
