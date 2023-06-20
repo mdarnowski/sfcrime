@@ -136,24 +136,12 @@ def update_graph(graph_type):
     :param graph_type: Type of graph selected.
     :return: Plotly figure object.
     """
-    query_plotter = QueryPlotter(graph_type)
-
-    # Define queries for different graph types
+    db_manager = PostgreSQLManager.get_instance()
     if graph_type == 'bar':
-        query = PostgreSQLManager.get_instance().Session.query(CategoryDimension.incident_category,
-                                                               func.count(Incidents.incident_id).label('num_of_incidents')) \
-            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
-            .group_by(CategoryDimension.incident_category)
+        df = db_manager.fetch_category_counts()
     elif graph_type == 'stacked_bar':
-        query = PostgreSQLManager.get_instance().Session.query(CategoryDimension.incident_category,
-                                                               ResolutionDimension.resolution,
-                                                               func.count(Incidents.incident_id).label('num_of_incidents')) \
-            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
-            .join(ResolutionDimension, ResolutionDimension.key == Incidents.resolution_key) \
-            .group_by(CategoryDimension.incident_category, ResolutionDimension.resolution)
-
-    # Get data and plot graph
-    df = query_plotter.get_data(query)
+        df = db_manager.fetch_category_resolution_counts()
+    query_plotter = QueryPlotter(graph_type)
     fig = query_plotter.plot_graph(df)
     return fig
 

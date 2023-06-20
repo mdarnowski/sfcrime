@@ -1,6 +1,8 @@
-from sqlalchemy import create_engine, text
+import pandas as pd
+from sqlalchemy import create_engine, text, func
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config.database import db_config
+from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension
 
 
 class PostgreSQLManager:
@@ -104,3 +106,31 @@ class PostgreSQLManager:
         """
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
+
+    def fetch_category_counts(self):
+        """
+        Fetch data for plotting category counts.
+
+        :return: DataFrame containing the result of the query.
+        """
+        query = self.Session.query(CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
+            .group_by(CategoryDimension.incident_category)
+
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_category_resolution_counts(self):
+        """
+        Fetch data for plotting category and resolution counts.
+
+        :return: DataFrame containing the result of the query.
+        """
+        query = self.Session.query(CategoryDimension.incident_category,
+                                   ResolutionDimension.resolution,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
+            .join(ResolutionDimension, ResolutionDimension.key == Incidents.resolution_key) \
+            .group_by(CategoryDimension.incident_category, ResolutionDimension.resolution)
+
+        return pd.read_sql(query.statement, self.Session.bind)
