@@ -3,26 +3,19 @@ import dash_bootstrap_components as dbc
 from dash import dcc
 import plotly.express as px
 import pandas as pd
-from sqlalchemy import create_engine, func
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.sql import func
+from model.SQLAlchemy import Incidents, CategoryDimension
+from utilities.PostgreSQLManager import PostgreSQLManager
 
-from config.database import db_config
-from model.SQLAlchemy import Base, Incidents, CategoryDimension
-
+db_manager = PostgreSQLManager.get_instance()
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-# Setting up SQLAlchemy session
-engine = create_engine(
-    f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['dbname']}")
-Session = sessionmaker(bind=engine)
-session = Session()
-
 # Querying the data for the chart
-df = pd.read_sql(session.query(CategoryDimension.incident_category,
-                               func.count(Incidents.incident_id).label('num_of_incidents'))
+df = pd.read_sql(db_manager.Session.query(CategoryDimension.incident_category,
+                                          func.count(Incidents.incident_id).label('num_of_incidents'))
                  .join(Incidents, Incidents.category_key == CategoryDimension.key)
                  .group_by(CategoryDimension.incident_category)
-                 .statement, session.bind)
+                 .statement, db_manager.Session.bind)
 
 # Creating the chart
 fig = px.bar(df, x='incident_category', y='num_of_incidents', title='Number of incidents per category')

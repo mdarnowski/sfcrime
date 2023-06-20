@@ -1,12 +1,9 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 import pandas as pd
 from tqdm import tqdm
-
-from config.database import db_config
 from model.SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
     LocationDimension, ResolutionDimension, Incidents
 from utilities.DimensionMapper import DimensionMapper
+from utilities.PostgreSQLManager import PostgreSQLManager
 
 
 def load_data(filepath):
@@ -51,16 +48,16 @@ def bulk_insert_and_get_keys(session, batch_df, dimension_class):
     return keys
 
 
-def insert_data(df, engine):
+def insert_data(df):
     """
     Insert data into the database. This function will insert data into the dimension tables first, then insert data
     into the fact table.
 
     :param df: Dataframe containing the data.
-    :param engine: Engine to connect to the database.
     :return: None
     """
-    session = sessionmaker(bind=engine)()
+    db_manager = PostgreSQLManager.get_instance()
+    session = db_manager.Session()
 
     key_name_map = {
             DistrictDimension: 'district_key',
@@ -70,6 +67,7 @@ def insert_data(df, engine):
         }
 
     dimension_mapper = DimensionMapper(session, df, key_name_map)
+    session.commit()
 
     batch_size = 10000
     for start_idx in tqdm(range(0, len(df), batch_size), desc="Inserting rows"):
@@ -91,6 +89,7 @@ def insert_data(df, engine):
 
     session.commit()
     session.close()
+    db_manager.disconnect()
 
 
 def main():
@@ -99,11 +98,9 @@ def main():
     loads the data, and inserts it into the database.
     :return: None
     """
-    engine = create_engine(
-        f"postgresql://{db_config['user']}:{db_config['password']}@{db_config['host']}:{db_config['port']}/{db_config['dbname']}")
 
     df = load_data('data/crime_sf.csv')
-    insert_data(df, engine)
+    insert_data(df)
 
 
 if __name__ == "__main__":
