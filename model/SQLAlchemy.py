@@ -1,12 +1,8 @@
-from sqlalchemy.orm import declarative_base, DeclarativeMeta
-from sqlalchemy import Column, Integer, String, TIMESTAMP, DATE, TIME, FLOAT, ForeignKey, INT, TEXT
-from abc import abstractmethod, ABCMeta
+from sqlalchemy.orm import declarative_base, DeclarativeMeta, relationship
+from sqlalchemy import Column, Integer, String, TIMESTAMP, DATE, TIME, FLOAT, ForeignKey, INT, TEXT, inspect, Index
+from abc import ABCMeta
 
 Base = declarative_base()
-
-
-def get_base():
-    return Base
 
 
 class ABCWithSQLAlchemy(ABCMeta, DeclarativeMeta):
@@ -18,9 +14,8 @@ class Dimension(Base, metaclass=ABCWithSQLAlchemy):
     key = Column(Integer, primary_key=True, autoincrement=True)
 
     @classmethod
-    @abstractmethod
     def get_columns(cls):
-        pass
+        return [column.name for column in inspect(cls).c if column.name != 'key']
 
 
 class DateDimension(Dimension):
@@ -33,11 +28,6 @@ class DateDimension(Dimension):
     incident_day_of_week = Column(String(255), nullable=False)
     report_datetime = Column(TIMESTAMP, nullable=False)
 
-    @classmethod
-    def get_columns(cls):
-        return ['incident_datetime', 'incident_date', 'incident_time',
-                'incident_year', 'incident_day_of_week', 'report_datetime']
-
 
 class CategoryDimension(Dimension):
     __tablename__ = 'category_dimension'
@@ -46,20 +36,12 @@ class CategoryDimension(Dimension):
     incident_subcategory = Column(String(255))
     incident_code = Column(Integer, nullable=False)
 
-    @classmethod
-    def get_columns(cls):
-        return ['incident_category', 'incident_subcategory', 'incident_code']
-
 
 class DistrictDimension(Dimension):
     __tablename__ = 'district_dimension'
 
     police_district = Column(String(255))
     analysis_neighborhood = Column(String(255))
-
-    @classmethod
-    def get_columns(cls):
-        return ['police_district', 'analysis_neighborhood']
 
 
 class IncidentDetailsDimension(Dimension):
@@ -68,10 +50,6 @@ class IncidentDetailsDimension(Dimension):
     incident_number = Column(INT, nullable=False)
     incident_description = Column(TEXT)
 
-    @classmethod
-    def get_columns(cls):
-        return ['incident_number', 'incident_description']
-
 
 class LocationDimension(Dimension):
     __tablename__ = 'location_dimension'
@@ -79,19 +57,11 @@ class LocationDimension(Dimension):
     latitude = Column(FLOAT)
     longitude = Column(FLOAT)
 
-    @classmethod
-    def get_columns(cls):
-        return ['latitude', 'longitude']
-
 
 class ResolutionDimension(Dimension):
     __tablename__ = 'resolution_dimension'
 
     resolution = Column(String(255), nullable=False)
-
-    @classmethod
-    def get_columns(cls):
-        return ['resolution']
 
 
 class Incidents(Base):
@@ -104,3 +74,13 @@ class Incidents(Base):
     resolution_key = Column(Integer, ForeignKey('resolution_dimension.key'))
     location_key = Column(Integer, ForeignKey('location_dimension.key'))
     incident_details_key = Column(Integer, ForeignKey('incident_details_dimension.key'))
+
+    date_dimension = relationship('DateDimension')
+    category_dimension = relationship('CategoryDimension')
+    district_dimension = relationship('DistrictDimension')
+    resolution_dimension = relationship('ResolutionDimension')
+    location_dimension = relationship('LocationDimension')
+    incident_details_dimension = relationship('IncidentDetailsDimension')
+
+    index = Index('idx_incidents_keys', "date_key", "category_key",
+                  "district_key", "resolution_key", "location_key", "incident_details_key")
