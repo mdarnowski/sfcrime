@@ -1,115 +1,64 @@
-import dash
-import dash_bootstrap_components as dbc
-from dash import dcc, html, Input, Output
-import plotly.express as px
-import pandas as pd
-from sqlalchemy.sql import func
-from model.SQLAlchemy import Incidents, CategoryDimension, ResolutionDimension
+from flask import Flask, render_template, jsonify, Response
+from BatchInserter import InsertTask, ActionLock
 from utilities.PostgreSQLManager import PostgreSQLManager
+import json
+import time
+import threading
+from dash import dcc, Dash
+import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output
+from utilities.QueryPlotter import QueryPlotter
+
+app = Flask(__name__)
+dash_app = Dash(__name__, server=app, url_base_pathname='/dashboard/')
+app.template_folder = 'templates'
+
+action_lock = ActionLock()
+
+task = InsertTask()
 
 
-class QueryPlotter:
-    def __init__(self, graph_type):
-        """
-        Initialize the QueryPlotter object with graph_type.
-
-        :param graph_type: Type of graph ('bar' or 'stacked_bar').
-        """
-        self.graph_type = graph_type
-        self.db_manager = PostgreSQLManager.get_instance()
-
-    def get_data(self, query):
-        """
-        Fetch data from the database.
-
-        :param query: SQLAlchemy query object.
-        :return: DataFrame containing the result of the query.
-        """
-        return pd.read_sql(query.statement, self.db_manager.Session.bind)
-
-    def plot_graph(self, df):
-        """
-        Plot the graph based on the data provided.
-
-        :param df: DataFrame containing data for the graph.
-        :return: Plotly figure object.
-        """
-        if self.graph_type == 'bar':
-            fig = self.plot_bar_graph(df)
-        elif self.graph_type == 'stacked_bar':
-            fig = self.plot_stacked_bar_graph(df)
-
-        # Add annotation for logarithmic scale
-        fig.add_annotation(
-            x=0,
-            y=1.05,
-            xref="paper",
-            yref="paper",
-            text="Note: The x-axis is on a logarithmic scale.",
-            showarrow=False,
-            font=dict(size=12, color="red")
-        )
-
-        return fig
-
-    def plot_bar_graph(self, df):
-        """
-        Plot a bar graph.
-
-        :param df: DataFrame containing data for the graph.
-        :return: Plotly figure object.
-        """
-        fig = px.bar(df, y='incident_category', x='num_of_incidents',
-                     title='Incident Analysis',
-                     labels={'incident_category': 'Incident Category', 'num_of_incidents': 'Number of Incidents'},
-                     text='num_of_incidents',
-                     color='num_of_incidents',
-                     color_continuous_scale=px.colors.sequential.Plasma)
-
-        fig.update_layout(self.get_shared_layout())
-        fig.update_layout(xaxis=dict(type='log'))
-        return fig
-
-    def plot_stacked_bar_graph(self, df):
-        """
-        Plot a stacked bar graph.
-
-        :param df: DataFrame containing data for the graph.
-        :return: Plotly figure object.
-        """
-        fig = px.bar(df, y='incident_category', x='num_of_incidents',
-                     color='resolution',
-                     title='Overview of Resolution Status Across Crime Categories',
-                     labels={'incident_category': 'Crime Category', 'num_of_incidents': 'Number of Incidents',
-                             'resolution': 'Resolution'},
-                     template='plotly_white')
-
-        fig.update_layout(self.get_shared_layout())
-        fig.update_layout(xaxis=dict(type='log'))
-        return fig
-
-    @staticmethod
-    def get_shared_layout():
-        """
-        Shared layout properties for graphs.
-
-        :return: Dictionary containing shared layout properties.
-        """
-        return dict(title_font=dict(size=26, color='darkblue', family="Arial, sans-serif"),
-                    xaxis=dict(title_font=dict(size=18, color='darkred')),
-                    yaxis=dict(title_font=dict(size=18, color='darkgreen')),
-                    legend=dict(title_font=dict(size=16), title_text='Categories'),
-                    height=600,
-                    uniformtext_minsize=8,
-                    uniformtext_mode='hide',
-                    template='plotly_white',
-                    uirevision='constant')
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+@app.route('/insert_batches', methods=['POST'])
+def handle_insert_batches():
+    if not action_lock.is_locked():
+        action_lock.perform(lambda: threading.Thread(target=task.run).start())
+    return jsonify({"message": "Batch Insertion started"}), 202
 
-# Setting up the layout of the dashboard
-app.layout = dbc.Container([
+
+@app.route('/create_database', methods=['POST'])
+def handle_create_database():
+    if not action_lock.is_locked():
+        action_lock.perform(lambda: PostgreSQLManager.get_instance().create_database())
+    return jsonify({"message": "Database creation started"}), 202
+
+
+@app.route('/recreate_tables', methods=['POST'])
+def handle_recreate_tables():
+    if not action_lock.is_locked():
+        action_lock.perform(lambda: PostgreSQLManager.get_instance().recreate_tables())
+    return jsonify({"message": "Table recreation started"}), 202
+
+
+@app.route('/stream_updates')
+def stream_updates():
+    def generate():
+        while True:
+            if task.running:
+                yield f"data:{json.dumps({'total_rows_added': task.total_rows_added, 'progress': task.progress})}\n\n"
+            else:
+                break
+            time.sleep(1)
+
+    return Response(generate(), mimetype='text/event-stream')
+
+
+# Dash app layout
+dash_app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             dcc.Dropdown(id='graph-dropdown',
@@ -125,7 +74,8 @@ app.layout = dbc.Container([
 ], fluid=True)
 
 
-@app.callback(
+# Dash app callback
+@dash_app.callback(
     Output('incident-graph', 'figure'),
     Input('graph-dropdown', 'value')
 )
@@ -147,4 +97,4 @@ def update_graph(graph_type):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    dash_app.run_server(debug=True)

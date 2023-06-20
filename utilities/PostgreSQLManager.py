@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text, func
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config.database import db_config
-from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension
+from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base
 
 
 class PostgreSQLManager:
@@ -97,7 +97,7 @@ class PostgreSQLManager:
         # Reconnect to the newly created database or already existing one
         self.connect()
 
-    def create_tables(self, Base):
+    def recreate_tables(self):
         """
         Create tables in the database based on the declarative base model.
         Existing tables will be dropped before creating new ones.

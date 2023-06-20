@@ -8,7 +8,7 @@ def setup_database():
     """
     db_manager = PostgreSQLManager.get_instance()
     db_manager.create_database()
-    db_manager.create_tables(Base)
+    db_manager.recreate_tables()
 
 
 if __name__ == "__main__":
