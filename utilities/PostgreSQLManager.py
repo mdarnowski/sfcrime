@@ -98,7 +98,9 @@ class PostgreSQLManager:
     def create_tables(self, Base):
         """
         Create tables in the database based on the declarative base model.
+        Existing tables will be dropped before creating new ones.
 
         :param Base: SQLAlchemy declarative base model containing table definitions.
         """
+        Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
