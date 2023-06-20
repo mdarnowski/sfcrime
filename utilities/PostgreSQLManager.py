@@ -1,18 +1,32 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config.database import db_config
 
 
 class PostgreSQLManager:
+    """
+    A singleton class to manage PostgreSQL database connections and operations.
+    """
+
     __instance = None
 
     @staticmethod
     def get_instance():
+        """
+        Retrieve the singleton instance of PostgreSQLManager.
+        If an instance doesn't exist, it initializes a new one.
+
+        :return: The singleton instance of PostgreSQLManager.
+        """
         if PostgreSQLManager.__instance is None:
             PostgreSQLManager()
         return PostgreSQLManager.__instance
 
     def __init__(self):
+        """
+        Initialize the PostgreSQLManager singleton instance.
+        Set up database configurations and establish a database connection.
+        """
         if PostgreSQLManager.__instance is not None:
             raise Exception("This class is a singleton!")
         else:
@@ -26,40 +40,65 @@ class PostgreSQLManager:
             self.Session = scoped_session(sessionmaker())
             self.connect()
 
-    def connect(self, dbname=None):
+    def connect(self, dbname=None, default_db=False):
+        """
+        Establish a connection to the PostgreSQL database.
+
+        :param dbname: Name of the database to connect to. If not provided, it uses the default.
+        :param default_db: If True, connects to the default 'postgres' database.
+        """
         if dbname:
             self.dbname = dbname
         if self.engine is not None:
             self.engine.dispose()
-        engine_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.dbname if self.dbname else ''}"
+
+        db_to_connect = 'postgres' if default_db else self.dbname
+        engine_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{db_to_connect}"
         self.engine = create_engine(engine_url)
-        self.Session.configure(bind=self.engine)
+
+        if not self.Session.registry.has():
+            self.Session.configure(bind=self.engine)
 
     def disconnect(self):
+        """
+        Disconnect from the PostgreSQL database by disposing the engine.
+        """
         if self.engine:
             self.engine.dispose()
 
     def execute(self, query, params=None):
+        """
+        Execute an SQL query against the PostgreSQL database.
+
+        :param query: SQL query string to execute.
+        :param params: Dictionary of parameters to bind to the query.
+        """
         try:
             self.Session.execute(query, params) if params else self.Session.execute(query)
         except Exception as e:
             print(f"An error occurred: {e}")
 
     def create_database(self):
-        self.connect()
+        """
+        Create a new database in PostgreSQL if it doesn't already exist.
+        """
+        self.connect(default_db=True)  # Connect to default 'postgres' database to check if desired database exists
 
-        result_proxy = self.Session.execute(f"SELECT 1 FROM pg_database WHERE datname = '{self.dbname}'")
+        query = text("SELECT 1 FROM pg_database WHERE datname = :dbname")
+        result_proxy = self.Session.execute(query, {"dbname": self.dbname})
         db_exists = result_proxy.fetchone()
 
         if not db_exists:
-            self.Session.execute(f"COMMIT")
-            self.Session.execute(f"CREATE DATABASE {self.dbname}")
-        else:
-            result_proxy = self.Session.execute(f"SELECT tablename FROM pg_tables WHERE schemaname='public'")
-            tables = result_proxy.fetchall()
-
-            for table in tables:
-                self.Session.execute(f"DROP TABLE IF EXISTS {table[0]} CASCADE")
+            self.Session.execute(text("COMMIT"))
+            query = text(f"CREATE DATABASE {self.dbname}")
+            self.Session.execute(query)
+        # Reconnect to the newly created database or already existing one
+        self.connect()
 
     def create_tables(self, Base):
+        """
+        Create tables in the database based on the declarative base model.
+
+        :param Base: SQLAlchemy declarative base model containing table definitions.
+        """
         Base.metadata.create_all(self.engine)
