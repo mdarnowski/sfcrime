@@ -6,6 +6,7 @@ from tqdm import tqdm
 from config.database import db_config
 from model.SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
     LocationDimension, ResolutionDimension, Incidents
+from utilities.DimensionMapper import DimensionMapper
 
 
 def load_data(filepath):
@@ -18,47 +19,6 @@ def load_data(filepath):
     df = pd.read_csv(filepath)
     df.columns = df.columns.str.replace(' ', '_').str.lower()
     return df.where(pd.notnull(df), None)
-
-
-def get_mappings(session, df, table_class):
-    """
-    Generates a dictionary with mappings for the dimensions based on the data from a DataFrame and a table class.
-
-    :param session: An active SQLAlchemy session.
-    :param df: The DataFrame containing the data.
-    :param table_class: The class of the table.
-    :return: A dictionary with mappings for the dimensions.
-    """
-    existing_records = session.query(table_class).all()
-    columns = table_class.get_columns()
-    existing_mapping = {tuple(getattr(record, col) for col in columns): record.key for record in existing_records}
-    unique_df = df[list(columns)].drop_duplicates()
-    new_records = [
-        dict(zip(columns, row)) for row in unique_df.values
-        if tuple(row) not in existing_mapping and not all(pd.isnull(cell) for cell in row)
-    ]
-
-    new_objects = [table_class(**record) for record in new_records]
-    session.add_all(new_objects)
-    session.commit()
-
-    new_mapping = {tuple(getattr(obj, col) for col in columns): obj.key for obj in new_objects}
-    mapping = {**existing_mapping, **new_mapping}
-
-    return mapping
-
-
-def get_key(row, mapping, *columns):
-    """
-    Retrieve the key from a mapping using row values.
-
-    :param row: DataFrame row
-    :param mapping: dictionary with keys as tuples
-    :param columns: tuple with column names
-    :return: The key from the mapping if found, otherwise None
-    """
-    key_elements = tuple(getattr(row, col) for col in columns)
-    return mapping.get(key_elements)
 
 
 def get_keys(session, dimension_class, num_of_values):
@@ -100,13 +60,16 @@ def insert_data(df, engine):
     :param engine: Engine to connect to the database.
     :return: None
     """
-    Session = sessionmaker(bind=engine)
-    session = Session()
+    session = sessionmaker(bind=engine)()
 
-    mappings = {
-        DimensionClass: get_mappings(session, df, DimensionClass)
-        for DimensionClass in [DistrictDimension, ResolutionDimension, CategoryDimension, LocationDimension]
-    }
+    key_name_map = {
+            DistrictDimension: 'district_key',
+            ResolutionDimension: 'resolution_key',
+            CategoryDimension: 'category_key',
+            LocationDimension: 'location_key'
+        }
+
+    dimension_mapper = DimensionMapper(session, df, key_name_map)
 
     batch_size = 10000
     for start_idx in tqdm(range(0, len(df), batch_size), desc="Inserting rows"):
@@ -117,11 +80,8 @@ def insert_data(df, engine):
 
         batch_values = [
             {
+                **dimension_mapper.get_keys(row),
                 'date_key': date_keys[idx],
-                'category_key': get_key(row, mappings[CategoryDimension], *CategoryDimension.get_columns()),
-                'district_key': get_key(row, mappings[DistrictDimension], *DistrictDimension.get_columns()),
-                'resolution_key': get_key(row, mappings[ResolutionDimension], *ResolutionDimension.get_columns()),
-                'location_key': get_key(row, mappings[LocationDimension], *LocationDimension.get_columns()),
                 'incident_details_key': incident_detail_keys[idx]
             }
             for idx, row in enumerate(batch_df.itertuples(index=False))

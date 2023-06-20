@@ -1,4 +1,4 @@
-from model import SQLAlchemy
+from model.SQLAlchemy import Base
 from utilities.PostgreSQLManager import PostgreSQLManager
 from config.database import db_config
 
@@ -20,7 +20,7 @@ def setup_database(user, password, host, port, dbname):
     """
     db_manager = PostgreSQLManager(user, password, host, port, dbname)
     db_manager.create_database()
-    db_manager.create_tables(SQLAlchemy.get_base())
+    db_manager.create_tables(Base)
 
 
 if __name__ == "__main__":
