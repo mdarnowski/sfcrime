@@ -26,10 +26,11 @@ class QueryPlotter:
                          color_continuous_scale=px.colors.sequential.Plasma)
 
             fig.update_layout(title_font=dict(size=26, color='darkblue', family="Arial, sans-serif"),
-                              xaxis=dict(title_font=dict(size=18, color='darkred')),
+                              xaxis=dict(type='log', title_font=dict(size=18, color='darkred')),
                               yaxis=dict(title_font=dict(size=18, color='darkgreen')),
                               legend=dict(title_font=dict(size=16), title_text='Categories'),
                               font=dict(family="Arial, sans-serif"),
+                              height=600,
                               uniformtext_minsize=8,
                               uniformtext_mode='hide',
                               template='plotly_white',
@@ -41,8 +42,22 @@ class QueryPlotter:
                          title='Overview of Resolution Status Across Crime Categories',
                          labels={'incident_category': 'Crime Category', 'num_of_incidents': 'Number of Incidents',
                                  'resolution': 'Resolution'},
-                         height=600,
                          template='plotly_white')
+
+            fig.update_layout(height=600,
+                              xaxis=dict(type='log', title_font=dict(size=18, color='darkred')))
+
+        # Add annotation for logarithmic scale
+        fig.add_annotation(
+            x=0,
+            y=1.05,
+            xref="paper",
+            yref="paper",
+            text="Note: The x-axis is on a logarithmic scale.",
+            showarrow=False,
+            font=dict(size=12, color="red")
+        )
+
         return fig
 
 
