@@ -100,6 +100,7 @@ class InsertTask(metaclass=Singleton):
         self.running = True
         self.df = DataLoader.get_instance().load_data()
         db_manager = PostgreSQLManager.get_instance()
+        db_manager.connect()
         session = db_manager.Session()
         self._inserter = BatchInserter(self.df, session)
 
