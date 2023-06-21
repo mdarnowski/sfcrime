@@ -123,7 +123,7 @@ class QueryPlotter:
         :param df: DataFrame containing data for the graph.
         :return: Plotly figure object.
         """
-        fig = px.line(df, x='incident_time', y='num_of_incidents',
+        fig = px.line(df, x='num_of_incidents', y='incident_time',
                       color='incident_category',
                       title='Temporal Crime Trends',
                       labels={'incident_time': 'Time of the day', 'num_of_incidents': 'Number of Incidents',
@@ -152,6 +152,11 @@ class QueryPlotter:
 
 
 GRAPH_CONFIG = {
+    'crime_hotspots': {
+        'label': 'Crime Hotspots',
+        'query_func': 'fetch_crime_hotspots',
+        'plot_func': 'plot_scatter_graph',
+    },
     'incident_analysis': {
         'label': 'Incident Analysis',
         'query_func': 'fetch_category_counts',
@@ -180,11 +185,6 @@ GRAPH_CONFIG = {
             'title': 'Most Frequent Crimes',
             'labels': {'incident_category': 'Crime Type', 'num_of_incidents': 'Frequency'}
         }
-    },
-    'crime_hotspots': {
-        'label': 'Crime Hotspots',
-        'query_func': 'fetch_crime_hotspots',
-        'plot_func': 'plot_scatter_graph',
     },
     'crime_trends': {
         'label': 'Temporal Crime Trends',

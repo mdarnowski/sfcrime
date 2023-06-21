@@ -4,7 +4,7 @@ from utilities.PostgreSQLManager import PostgreSQLManager
 import json
 import time
 import threading
-from dash import dcc, Dash
+from dash import html, dcc, Dash
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 from utilities.QueryPlotter import QueryPlotter, GRAPH_CONFIG
@@ -13,14 +13,14 @@ app = Flask(__name__)
 dash_app = Dash(__name__, server=app, url_base_pathname='/dashboard/')
 app.template_folder = 'templates'
 
-action_lock = ActionLock()
-
-task = InsertTask()
-
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+action_lock = ActionLock()
+task = InsertTask()
 
 
 @app.route('/insert_batches', methods=['POST'])
@@ -65,7 +65,10 @@ dash_app.layout = dbc.Container([
                          options=[{'label': cfg['label'], 'value': key} for key, cfg in GRAPH_CONFIG.items()],
                          value='incident_analysis',
                          clearable=False),
-            dcc.Graph(id='incident-graph')
+            dcc.Graph(id='incident-graph'),
+            html.A(html.Button('Go to Flask App', className='go-to-flask-app'),
+                   href='/',
+                   style={'margin': '10px'}),
         ], width=12)
     ])
 ], fluid=True)

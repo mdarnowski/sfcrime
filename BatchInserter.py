@@ -7,6 +7,8 @@ from utilities.DataLoader import DataLoader
 from utilities.DimensionMapper import DimensionMapper
 from utilities.PostgreSQLManager import PostgreSQLManager
 
+from concurrent.futures import ThreadPoolExecutor
+
 
 class BatchInserter:
     def __init__(self, df, session):
@@ -22,6 +24,7 @@ class BatchInserter:
         }
 
         self.dimension_mapper = DimensionMapper(session, df, key_name_map)
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
     def get_keys(self, dimension_class, num_of_values):
         last_key = self.session.query(dimension_class.key).order_by(dimension_class.key.desc()).first()[0]
@@ -44,8 +47,10 @@ class BatchInserter:
         except StopIteration:
             return False, 0
 
-        date_keys = self.bulk_insert_and_get_keys(batch_df, DateDimension)
-        incident_detail_keys = self.bulk_insert_and_get_keys(batch_df, IncidentDetailsDimension)
+        self.session.autoflush = False  # Disable autoflush
+
+        date_keys = self.executor.submit(self.bulk_insert_and_get_keys, batch_df, DateDimension).result()
+        incident_detail_keys = self.executor.submit(self.bulk_insert_and_get_keys, batch_df, IncidentDetailsDimension).result()
 
         batch_values = [
             {
@@ -64,6 +69,13 @@ class BatchInserter:
 
 
 class InsertTask:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(InsertTask, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
     def __init__(self):
         self.df = None
         self.total_rows_added = 0
@@ -98,6 +110,13 @@ class InsertTask:
 
 
 class ActionLock:
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(ActionLock, cls).__new__(cls, *args, **kwargs)
+        return cls._instance
+
     def __init__(self):
         self._lock = threading.Lock()
 
