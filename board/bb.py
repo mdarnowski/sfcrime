@@ -56,6 +56,7 @@ def stream_updates():
 
 
 # Dash app layout
+# Dash app layout
 dash_app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
@@ -64,9 +65,29 @@ dash_app.layout = dbc.Container([
                          value='incident_analysis',
                          clearable=False),
             dcc.Graph(id='incident-graph'),
-            html.A(html.Button('Go to Flask App', className='go-to-flask-app'),
-                   href='/',
-                   style={'margin': '10px'}),
+            html.A(
+                html.Button(
+                    'Initialization menu',
+                    className='go-to-flask-app',
+                    style={
+                        'border': 'none',
+                        'padding': '10px 20px',
+                        'marginBottom': '10px',
+                        'borderRadius': '5px',
+                        'color': '#fff',
+                        'cursor': 'pointer',
+                        'fontSize': '16px',
+                        'background': '#6c757d',
+                        'width': '200px'
+                    }
+                ),
+                href='/',
+                style={
+                    'display': 'flex',
+                    'justifyContent': 'center',
+                    'margin': '10px auto'
+                }
+            ),
         ], width=12)
     ])
 ], fluid=True)
