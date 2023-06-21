@@ -6,6 +6,7 @@ from utilities.PostgreSQLManager import PostgreSQLManager
 from datetime import datetime, date
 import statsmodels
 
+
 class QueryPlotter:
     def __init__(self, graph_type):
         """
@@ -24,16 +25,16 @@ class QueryPlotter:
         """
         df = self.get_data()
         fig = getattr(self, self.graph_config['plot_func'])(df, **self.graph_config.get('plot_params', {}))
-
-        fig.add_annotation(
-            x=0,
-            y=1.05,
-            xref="paper",
-            yref="paper",
-            text="Note: The x-axis is on a logarithmic scale.",
-            showarrow=False,
-            font=dict(size=12, color="red")
-        )
+        if self.graph_config.get('is_logarithmic', False):
+            fig.add_annotation(
+                x=0,
+                y=1.05,
+                xref="paper",
+                yref="paper",
+                text="Note: The x-axis is on a logarithmic scale.",
+                showarrow=False,
+                font=dict(size=12, color="red")
+            )
         return fig
 
     def get_data(self, *args, **kwargs):
@@ -103,7 +104,8 @@ class QueryPlotter:
             autosize=True,
             hovermode='closest',
             mapbox=dict(
-                accesstoken='pk.eyJ1IjoiczE2OTQxIiwiYSI6ImNsajVvMG4wMDBjcGYzY3F5OWJjazcxMmgifQ.lCzhgVuM5B6GOufCDaomBw',  # replace with your Mapbox access token
+                accesstoken='pk.eyJ1IjoiczE2OTQxIiwiYSI6ImNsajVvMG4wMDBjcGYzY3F5OWJjazcxMmgifQ.lCzhgVuM5B6GOufCDaomBw',
+                # replace with your Mapbox access token
                 bearing=0,
                 center=dict(
                     lat=37.7749,  # latitude of San Francisco
@@ -117,15 +119,6 @@ class QueryPlotter:
 
         return fig
 
-    import pandas as pd
-
-    import pandas as pd
-
-    import plotly.graph_objects as go
-    import pandas as pd
-    from datetime import datetime, date
-
-    # ...
 
     def plot_line_graph(self, df):
         """
@@ -198,6 +191,7 @@ GRAPH_CONFIG = {
     'incident_analysis': {
         'label': 'Incident Analysis',
         'query_func': 'fetch_category_counts',
+        'is_logarithmic': True,
         'plot_func': 'plot_bar_graph',
         'plot_params': {
             'x': 'num_of_incidents',
@@ -209,12 +203,14 @@ GRAPH_CONFIG = {
     },
     'resolution_status': {
         'label': 'Resolution Status Across Crime Categories',
+        'is_logarithmic': True,
         'query_func': 'fetch_category_resolution_counts',
         'plot_func': 'plot_stacked_bar_graph',
     },
     'most_frequent_crimes': {
         'label': 'Most Frequent Crimes',
         'query_func': 'fetch_most_frequent_crimes',
+        'is_logarithmic': True,
         'plot_func': 'plot_bar_graph',
         'plot_params': {
             'x': 'num_of_incidents',
@@ -232,6 +228,7 @@ GRAPH_CONFIG = {
     'district_crimes': {
         'label': 'Crimes in Specific Districts',
         'query_func': 'fetch_district_crimes',
+        'is_logarithmic': True,
         'plot_func': 'plot_bar_graph',
         'plot_params': {
             'x': 'num_of_incidents',
