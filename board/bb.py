@@ -12,6 +12,8 @@ from utilities.QueryPlotter import QueryPlotter, GRAPH_CONFIG
 app = Flask(__name__)
 dash_app = Dash(__name__, server=app, url_base_pathname='/dashboard/')
 app.template_folder = 'templates'
+action_lock = ActionLock()
+task = InsertTask()
 
 
 @app.route('/')
@@ -19,27 +21,23 @@ def index():
     return render_template('index.html')
 
 
-action_lock = ActionLock()
-task = InsertTask()
-
-
 @app.route('/insert_batches', methods=['POST'])
 def handle_insert_batches():
-    if not action_lock.is_locked():
+    if not action_lock.is_locked() and not task.running:
         action_lock.perform(lambda: threading.Thread(target=task.run).start())
     return jsonify({"message": "Batch Insertion started"}), 202
 
 
 @app.route('/create_database', methods=['POST'])
 def handle_create_database():
-    if not action_lock.is_locked():
+    if not action_lock.is_locked() and not task.running:
         action_lock.perform(lambda: PostgreSQLManager.get_instance().create_database())
     return jsonify({"message": "Database creation started"}), 202
 
 
 @app.route('/recreate_tables', methods=['POST'])
 def handle_recreate_tables():
-    if not action_lock.is_locked():
+    if not action_lock.is_locked() and not task.running:
         action_lock.perform(lambda: PostgreSQLManager.get_instance().recreate_tables())
     return jsonify({"message": "Table recreation started"}), 202
 

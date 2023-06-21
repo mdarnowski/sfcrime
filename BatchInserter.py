@@ -1,12 +1,9 @@
 import threading
-import time
-
 from model.SQLAlchemy import DateDimension, CategoryDimension, DistrictDimension, IncidentDetailsDimension, \
     LocationDimension, ResolutionDimension, Incidents
 from utilities.DataLoader import DataLoader
 from utilities.DimensionMapper import DimensionMapper
 from utilities.PostgreSQLManager import PostgreSQLManager
-
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -50,7 +47,8 @@ class BatchInserter:
         self.session.autoflush = False  # Disable autoflush
 
         date_keys = self.executor.submit(self.bulk_insert_and_get_keys, batch_df, DateDimension).result()
-        incident_detail_keys = self.executor.submit(self.bulk_insert_and_get_keys, batch_df, IncidentDetailsDimension).result()
+        incident_detail_keys = self.executor.submit(self.bulk_insert_and_get_keys, batch_df,
+                                                    IncidentDetailsDimension).result()
 
         batch_values = [
             {
@@ -68,17 +66,20 @@ class BatchInserter:
         return True, len(batch_values)
 
 
-class InsertTask:
-    _instance = None
+class Singleton(type):
+    _instances = {}
 
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(InsertTask, cls).__new__(cls, *args, **kwargs)
-        return cls._instance
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
 
+
+class InsertTask(metaclass=Singleton):
     def __init__(self):
-        self.df = None
         self.total_rows_added = 0
+        self._inserter = None
+        self.df = None
         self.total_batches = 0
         self.progress = 0
         self.running = False
@@ -88,13 +89,15 @@ class InsertTask:
         self.df = DataLoader.get_instance().load_data()
         db_manager = PostgreSQLManager.get_instance()
         session = db_manager.Session()
-        inserter = BatchInserter(self.df, session)
+        self._inserter = BatchInserter(self.df, session)
 
         self.total_batches = len(self.df) // 10000 + 1
         current_batch = 0
+        self.total_rows_added = 0
+        self.progress = 0
 
         while True:
-            success, batch_rows_added = inserter.insert_one_batch()
+            success, batch_rows_added = self._inserter.insert_one_batch()
 
             if not success:
                 break
@@ -102,21 +105,14 @@ class InsertTask:
             current_batch += 1
             self.total_rows_added += batch_rows_added
             self.progress = (current_batch / self.total_batches) * 100
-            time.sleep(1)
 
         session.commit()
         session.close()
+        self._inserter = None
         self.running = False
 
 
-class ActionLock:
-    _instance = None
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(ActionLock, cls).__new__(cls, *args, **kwargs)
-        return cls._instance
-
+class ActionLock(metaclass=Singleton):
     def __init__(self):
         self._lock = threading.Lock()
 
