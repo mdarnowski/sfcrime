@@ -18,11 +18,15 @@ task = InsertTask()
 
 @app.route('/')
 def index():
+    """Handle index page requests."""
     return render_template('index.html')
 
 
 @app.route('/insert_batches', methods=['POST'])
 def handle_insert_batches():
+    """
+    Start batch insertion into database if no other task is running.
+    """
     if not action_lock.is_locked() and not task.running:
         action_lock.perform(lambda: threading.Thread(target=task.run).start())
     return jsonify({"message": "Batch Insertion started"}), 202
@@ -30,24 +34,35 @@ def handle_insert_batches():
 
 @app.route('/create_database', methods=['POST'])
 def handle_create_database():
+    """
+    Start creating database if no other task is running.
+    """
     if not action_lock.is_locked() and not task.running:
-        action_lock.perform(lambda: PostgreSQLManager.get_instance().create_database())
+        action_lock.perform(
+            lambda: PostgreSQLManager.get_instance().create_database())
     return jsonify({"message": "Database creation started"}), 202
 
 
 @app.route('/recreate_tables', methods=['POST'])
 def handle_recreate_tables():
+    """
+    Start recreating tables in database if no other task is running.
+    """
     if not action_lock.is_locked() and not task.running:
-        action_lock.perform(lambda: PostgreSQLManager.get_instance().recreate_tables())
+        action_lock.perform(
+            lambda: PostgreSQLManager.get_instance().recreate_tables())
     return jsonify({"message": "Table recreation started"}), 202
 
 
 @app.route('/stream_updates')
 def stream_updates():
+    """
+    Stream updates about task progress to client.
+    """
     def generate():
         while True:
             if task.running:
-                yield f"data:{json.dumps({'total_rows_added': task.total_rows_added, 'progress': task.progress})}\n\n"
+                yield f"data:{json.dumps({'total_rows_added': task.total_rows_added,'progress': task.progress})}\n\n"
             else:
                 break
             time.sleep(1)
@@ -56,12 +71,12 @@ def stream_updates():
 
 
 # Dash app layout
-# Dash app layout
 dash_app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             dcc.Dropdown(id='graph-dropdown',
-                         options=[{'label': cfg['label'], 'value': key} for key, cfg in GRAPH_CONFIG.items()],
+                         options=[{'label': cfg['label'], 'value': key}
+                                  for key, cfg in GRAPH_CONFIG.items()],
                          value='incident_analysis',
                          clearable=False),
             dcc.Graph(id='incident-graph'),
@@ -93,7 +108,6 @@ dash_app.layout = dbc.Container([
 ], fluid=True)
 
 
-# Dash app callback
 @dash_app.callback(
     Output('incident-graph', 'figure'),
     Input('graph-dropdown', 'value')
@@ -106,8 +120,7 @@ def update_graph(graph_type):
     :return: Plotly figure object.
     """
     query_plotter = QueryPlotter(graph_type)
-    fig = query_plotter.plot_graph()
-    return fig
+    return query_plotter.plot_graph()
 
 
 if __name__ == '__main__':
