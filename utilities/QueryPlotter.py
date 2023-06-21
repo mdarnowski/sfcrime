@@ -1,6 +1,7 @@
+import numpy as np
 import pandas as pd
 from plotly import express as px
-
+import plotly.graph_objects as go
 from utilities.PostgreSQLManager import PostgreSQLManager
 
 
@@ -22,7 +23,6 @@ class QueryPlotter:
         """
         df = self.get_data()
         fig = getattr(self, self.graph_config['plot_func'])(df, **self.graph_config.get('plot_params', {}))
-
 
         fig.add_annotation(
             x=0,
@@ -82,18 +82,38 @@ class QueryPlotter:
 
     def plot_scatter_graph(self, df):
         """
-        Plot a scatter graph.
+        Plot a heat map on a map of San Francisco.
 
         :param df: DataFrame containing data for the graph.
         :return: Plotly figure object.
         """
-        fig = px.scatter(df, x='latitude', y='longitude',
-                         size='num_of_incidents',
-                         title='Crime Hotspots',
-                         labels={'latitude': 'Latitude', 'longitude': 'Longitude', 'num_of_incidents': 'Number of Incidents'},
-                         color_continuous_scale=px.colors.sequential.Plasma)
+        fig = go.Figure(go.Densitymapbox(
+            lat=df['latitude'],
+            lon=df['longitude'],
+            z=df['num_of_incidents'],  # this will create a heat map based on the number of incidents
+            radius=20,  # increase the size of the heat map points
+            colorscale='Hot',  # change the color scale to 'Hot'
+            colorbar=dict(thickness=20, ticklen=3),  # customize the colorbar
+            hoverinfo='text',  # this will display the number of incidents when you hover over a point
+            hovertext=df['num_of_incidents'].astype(str) + ' incidents'  # customize the hover text
+        ))
 
-        fig.update_layout(self.get_shared_layout())
+        fig.update_layout(
+            autosize=True,
+            hovermode='closest',
+            mapbox=dict(
+                accesstoken='pk.eyJ1IjoiczE2OTQxIiwiYSI6ImNsajVvMG4wMDBjcGYzY3F5OWJjazcxMmgifQ.lCzhgVuM5B6GOufCDaomBw',  # replace with your Mapbox access token
+                bearing=0,
+                center=dict(
+                    lat=37.7749,  # latitude of San Francisco
+                    lon=-122.4194  # longitude of San Francisco
+                ),
+                pitch=0,
+                zoom=10
+            ),
+            height=800,  # adjust the height of the map here
+        )
+
         return fig
 
     def plot_line_graph(self, df):
