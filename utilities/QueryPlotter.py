@@ -3,7 +3,8 @@ import pandas as pd
 from plotly import express as px
 import plotly.graph_objects as go
 from utilities.PostgreSQLManager import PostgreSQLManager
-
+from datetime import datetime, date
+import statsmodels
 
 class QueryPlotter:
     def __init__(self, graph_type):
@@ -116,21 +117,58 @@ class QueryPlotter:
 
         return fig
 
+    import pandas as pd
+
+    import pandas as pd
+
+    import plotly.graph_objects as go
+    import pandas as pd
+    from datetime import datetime, date
+
+    # ...
+
     def plot_line_graph(self, df):
         """
-        Plot a line graph.
+        Plot a line graph connecting dots of the same category, grouped by 60 minutes.
 
         :param df: DataFrame containing data for the graph.
         :return: Plotly figure object.
         """
-        fig = px.line(df, x='num_of_incidents', y='incident_time',
-                      color='incident_category',
-                      title='Temporal Crime Trends',
-                      labels={'incident_time': 'Time of the day', 'num_of_incidents': 'Number of Incidents',
-                              'incident_category': 'Crime Category'},
-                      template='plotly_white')
+
+        # Convert incident_time to datetime
+        df['incident_time'] = pd.to_datetime(df['incident_time'].apply(lambda x: datetime.combine(date.today(), x)))
+        df.set_index('incident_time', inplace=True)  # Set incident_time as the index
+        grouped_df = df.groupby(['incident_category', pd.Grouper(freq='60T')]).sum().reset_index()
+
+        fig = go.Figure()
+
+        # Iterate over each category and add a line trace
+        for category, group in grouped_df.groupby('incident_category'):
+            fig.add_trace(go.Scatter(
+                x=group['incident_time'],
+                y=group['num_of_incidents'],
+                mode='lines',
+                name=category,
+                line=dict(shape='spline'),
+                marker=dict(size=6),
+            ))
+
+        fig.update_layout(
+            title='Temporal Crime Trends by Hour of the Day',
+            xaxis=dict(
+                title='Time of the Day',
+                tickmode='array',
+                tickvals=pd.date_range(start=date.today(), periods=24, freq='H').tolist(),
+                ticktext=[t.strftime('%H:%M') for t in pd.date_range(start=date.today(), periods=24, freq='H')],
+                tickformat='%H:%M',
+            ),
+            yaxis_title='Number of Incidents',
+            template='plotly_white',
+            showlegend=True
+        )
 
         fig.update_layout(self.get_shared_layout())
+
         return fig
 
     @staticmethod
@@ -189,7 +227,7 @@ GRAPH_CONFIG = {
     'crime_trends': {
         'label': 'Temporal Crime Trends',
         'query_func': 'fetch_crime_trends',
-        'plot_func': 'plot_line_graph',
+        'plot_func': 'plot_line_graph'
     },
     'district_crimes': {
         'label': 'Crimes in Specific Districts',
