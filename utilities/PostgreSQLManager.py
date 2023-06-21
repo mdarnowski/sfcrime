@@ -1,69 +1,193 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import datetime
+
+import pandas as pd
+from sqlalchemy import create_engine, text, func, desc
+from sqlalchemy.orm import sessionmaker, scoped_session
+from config.database import db_config
+from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base, LocationDimension, DateDimension, \
+    DistrictDimension
 
 
 class PostgreSQLManager:
-    def __init__(self, user, password, host, port, dbname=None):
-        self.user = user
-        self.password = password
-        self.host = host
-        self.port = port
-        self.dbname = dbname
-        self.engine = None
-        self.connection = None
+    """
+    A singleton class to manage PostgreSQL database connections and operations.
+    """
 
-    def connect(self, dbname=None):
+    __instance = None
+
+    @staticmethod
+    def get_instance():
+        """
+        Retrieve the singleton instance of PostgreSQLManager.
+        If an instance doesn't exist, it initializes a new one.
+
+        :return: The singleton instance of PostgreSQLManager.
+        """
+        if PostgreSQLManager.__instance is None:
+            PostgreSQLManager()
+        return PostgreSQLManager.__instance
+
+    def __init__(self):
+        """
+        Initialize the PostgreSQLManager singleton instance.
+        Set up database configurations and establish a database connection.
+        """
+        if PostgreSQLManager.__instance is not None:
+            raise Exception("This class is a singleton!")
+        else:
+            PostgreSQLManager.__instance = self
+            self.user = db_config['user']
+            self.password = db_config['password']
+            self.host = db_config['host']
+            self.port = db_config['port']
+            self.dbname = db_config['dbname']
+            self.engine = None
+            self.Session = scoped_session(sessionmaker())
+            self.connect()
+
+    def connect(self, dbname=None, default_db=False):
+        """
+        Establish a connection to the PostgreSQL database.
+
+        :param dbname: Name of the database to connect to. If not provided, it uses the default.
+        :param default_db: If True, connects to the default 'postgres' database.
+        """
         if dbname:
             self.dbname = dbname
-        engine_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.dbname if self.dbname else ''}"
-        self.engine = create_engine(engine_url)
-        self.connection = self.engine.connect()
+        if self.engine is not None:
+            self.engine.dispose()
 
-    def connect_to_server(self):
-        engine_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/"
+        db_to_connect = 'postgres' if default_db else self.dbname
+        engine_url = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{db_to_connect}"
         self.engine = create_engine(engine_url)
-        self.connection = self.engine.connect()
+
+        if not self.Session.registry.has():
+            self.Session.configure(bind=self.engine)
 
     def disconnect(self):
-        if self.connection:
-            self.connection.close()
+        """
+        Disconnect from the PostgreSQL database by disposing the engine.
+        """
         if self.engine:
             self.engine.dispose()
 
     def execute(self, query, params=None):
+        """
+        Execute an SQL query against the PostgreSQL database.
+
+        :param query: SQL query string to execute.
+        :param params: Dictionary of parameters to bind to the query.
+        """
         try:
-            self.connection.execute(query, params) if params else self.connection.execute(query)
+            self.Session.execute(query, params) if params else self.Session.execute(query)
         except Exception as e:
             print(f"An error occurred: {e}")
 
     def create_database(self):
-        self.connect_to_server()
+        """
+        Create a new database in PostgreSQL if it doesn't already exist.
+        """
+        self.connect(default_db=True)  # Connect to default 'postgres' database to check if desired database exists
 
-        # Check if database exists
-        result_proxy = self.connection.execute(f"SELECT 1 FROM pg_database WHERE datname = '{self.dbname}'")
+        query = text("SELECT 1 FROM pg_database WHERE datname = :dbname")
+        result_proxy = self.Session.execute(query, {"dbname": self.dbname})
         db_exists = result_proxy.fetchone()
 
         if not db_exists:
-            # Create a new database
-            self.connection.execute(f"COMMIT")  # Necessary to execute the next command outside of a transaction block
-            self.connection.execute(f"CREATE DATABASE {self.dbname}")
-        else:
-            self.disconnect()
-            self.connect(self.dbname)
-            # Get all tables in the database
-            result_proxy = self.connection.execute(f"SELECT tablename FROM pg_tables WHERE schemaname='public'")
-            tables = result_proxy.fetchall()
+            self.Session.execute(text("COMMIT"))
+            query = text(f"CREATE DATABASE {self.dbname}")
+            self.Session.execute(query)
+        # Reconnect to the newly created database or already existing one
+        self.connect()
 
-            # Truncate all tables
-            for table in tables:
-                self.connection.execute(f"DROP TABLE IF EXISTS {table[0]} CASCADE")
+    def recreate_tables(self):
+        """
+        Create tables in the database based on the declarative base model.
+        Existing tables will be dropped before creating new ones.
 
-        self.disconnect()
-
-    def create_tables(self, Base):
-        self.connect(self.dbname)
+        :param Base: SQLAlchemy declarative base model containing table definitions.
+        """
+        Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
-        session = sessionmaker(bind=self.engine)
-        session = session()
-        session.commit()
-        self.disconnect()
+
+    def fetch_category_counts(self):
+        """
+        Fetch data for plotting category counts.
+
+        :return: DataFrame containing the result of the query.
+        """
+        query = self.Session.query(CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
+            .group_by(CategoryDimension.incident_category)
+
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_category_resolution_counts(self):
+        """
+        Fetch data for plotting category and resolution counts.
+
+        :return: DataFrame containing the result of the query.
+        """
+        query = self.Session.query(CategoryDimension.incident_category,
+                                   ResolutionDimension.resolution,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
+            .join(ResolutionDimension, ResolutionDimension.key == Incidents.resolution_key) \
+            .group_by(CategoryDimension.incident_category, ResolutionDimension.resolution)
+
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_most_frequent_crimes(self, past_days=365):
+        """
+        Fetch data for the most frequently occurring types of crimes for the past specified days.
+        """
+        # Calculate the date for 'past_days' ago
+        date_past_days = datetime.datetime.now() - datetime.timedelta(days=past_days)
+
+        query = self.Session.query(CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
+            .join(DateDimension, DateDimension.key == Incidents.date_key) \
+            .filter(DateDimension.incident_date >= date_past_days) \
+            .group_by(CategoryDimension.incident_category) \
+            .order_by(desc('num_of_incidents'))
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_crime_hotspots(self):
+        """
+        Fetch data for identifying crime hotspots.
+        """
+        query = self.Session.query(LocationDimension.latitude, LocationDimension.longitude,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.location_key == LocationDimension.key) \
+            .group_by(LocationDimension.latitude, LocationDimension.longitude) \
+            .order_by(desc('num_of_incidents'))
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_crime_trends(self):
+        """
+        Fetch data for identifying temporal crime trends.
+        """
+        query = self.Session.query(DateDimension.incident_time, DateDimension.incident_day_of_week,
+                                   CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.date_key == DateDimension.key) \
+            .join(CategoryDimension, CategoryDimension.key == Incidents.category_key) \
+            .group_by(DateDimension.incident_time, DateDimension.incident_day_of_week,
+                      CategoryDimension.incident_category) \
+            .order_by(DateDimension.incident_time, DateDimension.incident_day_of_week)
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_district_crimes(self):
+        """
+        Fetch data for identifying crimes in all districts.
+        """
+        query = self.Session.query(DistrictDimension.police_district,
+                                   CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.district_key == DistrictDimension.key) \
+            .join(CategoryDimension, CategoryDimension.key == Incidents.category_key) \
+            .group_by(DistrictDimension.police_district, CategoryDimension.incident_category) \
+            .order_by(desc('num_of_incidents'))
+        return pd.read_sql(query.statement, self.Session.bind)

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Batch Inserter Dashboard</title>
+    <style>
+        .progress-bar {
+            width: 300px;
+            height: 20px;
+            background-color: #f2f2f2;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar .fill {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease-in-out;
+        }
+
+        .status-text {
+            font-weight: bold;
+        }
+    </style>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        var eventSource;
+
+        function startEventSource() {
+            eventSource = new EventSource("/stream_updates");
+
+            eventSource.onmessage = function (event) {
+                var data = JSON.parse(event.data);
+                var progress = data.progress;
+                var totalRowsAdded = data.total_rows_added;
+
+                $(".fill").width(progress + "%");
+                $(".status-text").text("Total Rows Added: " + totalRowsAdded);
+            };
+        }
+
+        $(document).ready(function() {
+            $("#insert-batches").on("click", function(event) {
+                event.preventDefault();
+
+                $.ajax({
+                    url: '/insert_batches',
+                    type: 'POST',
+                    success: function() {
+                        startEventSource();
+                    }
+                });
+            });
+
+            $("#create-database").on("click", function(event) {
+                event.preventDefault();
+
+                $.ajax({
+                    url: '/create_database',
+                    type: 'POST',
+                    success: function() {
+                        alert("Database creation started");
+                    }
+                });
+            });
+
+            $("#recreate-tables").on("click", function(event) {
+                event.preventDefault();
+
+                $.ajax({
+                    url: '/recreate_tables',
+                    type: 'POST',
+                    success: function() {
+                        alert("Table recreation started");
+                    }
+                });
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Batch Inserter Dashboard</h1>
+
+    <div class="progress-bar">
+        <div class="fill"></div>
+    </div>
+
+    <p class="status-text">Total Rows Added: 0</p>
+
+    <button id="insert-batches">Start Batch Insertion</button>
+    <button id="create-database">Create Database</button>
+    <button id="recreate-tables">Recreate Tables</button>
+</body>
+</html>
