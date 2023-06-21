@@ -57,8 +57,9 @@ class QueryPlotter:
         :param labels: Dict of labels for the axes and legend.
         :return: Plotly figure object.
         """
+        hover_data = {k: True for k in df.columns}  # Include all columns as hover data
         fig = px.bar(df, y=y, x=x, title=title, labels=labels, text=x, color=color,
-                     color_continuous_scale=px.colors.sequential.Plasma)
+                     color_continuous_scale=px.colors.sequential.Plasma, hover_data=hover_data)
 
         fig.update_layout(self.get_shared_layout())
         fig.update_layout(xaxis=dict(type='log'))
@@ -102,6 +103,7 @@ class QueryPlotter:
 
         fig.update_layout(
             autosize=True,
+            title='Crime Density Map of San Francisco',
             hovermode='closest',
             mapbox=dict(
                 accesstoken='pk.eyJ1IjoiczE2OTQxIiwiYSI6ImNsajVvMG4wMDBjcGYzY3F5OWJjazcxMmgifQ.lCzhgVuM5B6GOufCDaomBw',
@@ -116,9 +118,9 @@ class QueryPlotter:
             ),
             height=800,  # adjust the height of the map here
         )
+        fig.update_layout(self.get_shared_layout())
 
         return fig
-
 
     def plot_line_graph(self, df):
         """
@@ -235,7 +237,7 @@ GRAPH_CONFIG = {
             'y': 'police_district',
             'color': 'num_of_incidents',
             'title': 'Crimes in Specific Districts',
-            'labels': {'police_district': 'Police District', 'num_of_incidents': 'Number of Incidents'}
+            'labels': {'police_district': 'Police District', 'num_of_incidents': 'Number of Incidents','incident_category': 'Incident Category'}
         }
     }
 }
