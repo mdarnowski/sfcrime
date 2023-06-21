@@ -22,6 +22,12 @@ def index():
     return render_template('index.html')
 
 
+def another_db_process_msg():
+    return jsonify({
+        "message": "Currently, another database process is being executed"
+    }), 503
+
+
 @app.route('/insert_batches', methods=['POST'])
 def handle_insert_batches():
     """
@@ -29,7 +35,8 @@ def handle_insert_batches():
     """
     if not action_lock.is_locked() and not task.running:
         action_lock.perform(lambda: threading.Thread(target=task.run).start())
-    return jsonify({"message": "Batch Insertion started"}), 202
+        return jsonify({"message": "Batch Insertion started"}), 202
+    return another_db_process_msg()
 
 
 @app.route('/create_database', methods=['POST'])
@@ -40,7 +47,8 @@ def handle_create_database():
     if not action_lock.is_locked() and not task.running:
         action_lock.perform(
             lambda: PostgreSQLManager.get_instance().create_database())
-    return jsonify({"message": "Database creation started"}), 202
+        return jsonify({"message": "Database creation started"}), 202
+    return another_db_process_msg()
 
 
 @app.route('/recreate_tables', methods=['POST'])
@@ -51,7 +59,8 @@ def handle_recreate_tables():
     if not action_lock.is_locked() and not task.running:
         action_lock.perform(
             lambda: PostgreSQLManager.get_instance().recreate_tables())
-    return jsonify({"message": "Table recreation started"}), 202
+        return jsonify({"message": "Table recreation started"}), 202
+    return another_db_process_msg()
 
 
 @app.route('/stream_updates')
@@ -59,11 +68,11 @@ def stream_updates():
     """
     Stream updates about task progress to client.
     """
+
     def generate():
         while True:
-            if task.running:
-                yield f"data:{json.dumps({'total_rows_added': task.total_rows_added,'progress': task.progress})}\n\n"
-            else:
+            yield f"data:{json.dumps({'total_rows_added': task.total_rows_added, 'progress': task.progress})}\n\n"
+            if not task.running:
                 break
             time.sleep(1)
 
@@ -77,7 +86,7 @@ dash_app.layout = dbc.Container([
             dcc.Dropdown(id='graph-dropdown',
                          options=[{'label': cfg['label'], 'value': key}
                                   for key, cfg in GRAPH_CONFIG.items()],
-                         value='incident_analysis',
+                         value='crime_hotspots',
                          clearable=False),
             dcc.Graph(id='incident-graph'),
             html.A(
