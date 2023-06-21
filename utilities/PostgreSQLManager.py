@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, text, func, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config.database import db_config
 from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base, LocationDimension, DateDimension, \
-    DistrictDimension
+    DistrictDimension, IncidentDetailsDimension
 
 
 class PostgreSQLManager:
@@ -189,5 +189,16 @@ class PostgreSQLManager:
             .join(Incidents, Incidents.district_key == DistrictDimension.key) \
             .join(CategoryDimension, CategoryDimension.key == Incidents.category_key) \
             .group_by(DistrictDimension.police_district, CategoryDimension.incident_category) \
+            .order_by(desc('num_of_incidents'))
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_incident_details(self):
+        """
+        Fetch data for analyzing incident details.
+        """
+        query = self.Session.query(IncidentDetailsDimension.incident_description,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.incident_details_key == IncidentDetailsDimension.key) \
+            .group_by(IncidentDetailsDimension.incident_description) \
             .order_by(desc('num_of_incidents'))
         return pd.read_sql(query.statement, self.Session.bind)

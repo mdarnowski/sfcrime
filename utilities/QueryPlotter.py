@@ -1,10 +1,8 @@
-import numpy as np
 import pandas as pd
 from plotly import express as px
 import plotly.graph_objects as go
 from utilities.PostgreSQLManager import PostgreSQLManager
 from datetime import datetime, date
-import statsmodels
 
 
 class QueryPlotter:
@@ -122,6 +120,24 @@ class QueryPlotter:
 
         return fig
 
+    def plot_incident_details(self, df):
+        """
+        Plot a bar graph for incident details.
+
+        :param df: DataFrame containing data for the graph.
+        :return: Plotly figure object.
+        """
+        fig = px.bar(df, x='incident_description', y='num_of_incidents',
+                     title='Incident Details Analysis',
+                     labels={'incident_description': 'Incident Description', 'num_of_incidents': 'Number of Incidents'},
+                     color='num_of_incidents',
+                     color_continuous_scale=px.colors.sequential.Plasma)
+
+        fig.update_layout(self.get_shared_layout())
+        fig.update_layout(yaxis=dict(type='log'))
+        fig.update_layout(self.get_shared_layout())
+        return fig
+
     def plot_line_graph(self, df):
         """
         Plot a line graph connecting dots of the same category, grouped by 60 minutes.
@@ -177,7 +193,7 @@ class QueryPlotter:
                     xaxis=dict(title_font=dict(size=18, color='darkred')),
                     yaxis=dict(title_font=dict(size=18, color='darkgreen')),
                     legend=dict(title_font=dict(size=16), title_text='Categories'),
-                    height=600,
+                    height=800,
                     uniformtext_minsize=8,
                     uniformtext_mode='hide',
                     template='plotly_white',
@@ -239,5 +255,10 @@ GRAPH_CONFIG = {
             'title': 'Crimes in Specific Districts',
             'labels': {'police_district': 'Police District', 'num_of_incidents': 'Number of Incidents','incident_category': 'Incident Category'}
         }
+    },
+    'incident_details': {
+        'label': 'Incident Details Analysis',
+        'query_func': 'fetch_incident_details',
+        'plot_func': 'plot_incident_details',
     }
 }
