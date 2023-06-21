@@ -1,8 +1,11 @@
+import datetime
+
 import pandas as pd
-from sqlalchemy import create_engine, text, func
+from sqlalchemy import create_engine, text, func, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config.database import db_config
-from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base
+from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base, LocationDimension, DateDimension, \
+    DistrictDimension
 
 
 class PostgreSQLManager:
@@ -133,4 +136,58 @@ class PostgreSQLManager:
             .join(ResolutionDimension, ResolutionDimension.key == Incidents.resolution_key) \
             .group_by(CategoryDimension.incident_category, ResolutionDimension.resolution)
 
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_most_frequent_crimes(self, past_days=365):
+        """
+        Fetch data for the most frequently occurring types of crimes for the past specified days.
+        """
+        # Calculate the date for 'past_days' ago
+        date_past_days = datetime.datetime.now() - datetime.timedelta(days=past_days)
+
+        query = self.Session.query(CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.category_key == CategoryDimension.key) \
+            .join(DateDimension, DateDimension.key == Incidents.date_key) \
+            .filter(DateDimension.incident_date >= date_past_days) \
+            .group_by(CategoryDimension.incident_category) \
+            .order_by(desc('num_of_incidents'))
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_crime_hotspots(self):
+        """
+        Fetch data for identifying crime hotspots.
+        """
+        query = self.Session.query(LocationDimension.latitude, LocationDimension.longitude,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.location_key == LocationDimension.key) \
+            .group_by(LocationDimension.latitude, LocationDimension.longitude) \
+            .order_by(desc('num_of_incidents'))
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_crime_trends(self):
+        """
+        Fetch data for identifying temporal crime trends.
+        """
+        query = self.Session.query(DateDimension.incident_time, DateDimension.incident_day_of_week,
+                                   CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.date_key == DateDimension.key) \
+            .join(CategoryDimension, CategoryDimension.key == Incidents.category_key) \
+            .group_by(DateDimension.incident_time, DateDimension.incident_day_of_week,
+                      CategoryDimension.incident_category) \
+            .order_by(DateDimension.incident_time, DateDimension.incident_day_of_week)
+        return pd.read_sql(query.statement, self.Session.bind)
+
+    def fetch_district_crimes(self):
+        """
+        Fetch data for identifying crimes in all districts.
+        """
+        query = self.Session.query(DistrictDimension.police_district,
+                                   CategoryDimension.incident_category,
+                                   func.count(Incidents.incident_id).label('num_of_incidents')) \
+            .join(Incidents, Incidents.district_key == DistrictDimension.key) \
+            .join(CategoryDimension, CategoryDimension.key == Incidents.category_key) \
+            .group_by(DistrictDimension.police_district, CategoryDimension.incident_category) \
+            .order_by(desc('num_of_incidents'))
         return pd.read_sql(query.statement, self.Session.bind)

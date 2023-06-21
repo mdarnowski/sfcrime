@@ -11,31 +11,19 @@ class QueryPlotter:
 
         :param graph_type: Type of graph ('bar' or 'stacked_bar').
         """
-        self.graph_type = graph_type
+        self.graph_config = GRAPH_CONFIG[graph_type]
         self.db_manager = PostgreSQLManager.get_instance()
 
-    def get_data(self, query):
-        """
-        Fetch data from the database.
-
-        :param query: SQLAlchemy query object.
-        :return: DataFrame containing the result of the query.
-        """
-        return pd.read_sql(query.statement, self.db_manager.Session.bind)
-
-    def plot_graph(self, df):
+    def plot_graph(self):
         """
         Plot the graph based on the data provided.
 
-        :param df: DataFrame containing data for the graph.
         :return: Plotly figure object.
         """
-        if self.graph_type == 'bar':
-            fig = self.plot_bar_graph(df)
-        elif self.graph_type == 'stacked_bar':
-            fig = self.plot_stacked_bar_graph(df)
+        df = self.get_data()
+        fig = getattr(self, self.graph_config['plot_func'])(df, **self.graph_config.get('plot_params', {}))
 
-        # Add annotation for logarithmic scale
+
         fig.add_annotation(
             x=0,
             y=1.05,
@@ -45,21 +33,29 @@ class QueryPlotter:
             showarrow=False,
             font=dict(size=12, color="red")
         )
-
         return fig
 
-    def plot_bar_graph(self, df):
+    def get_data(self, *args, **kwargs):
+        """
+        Fetch data from the database.
+
+        :return: DataFrame containing the result of the query.
+        """
+        return getattr(self.db_manager, self.graph_config['query_func'])(*args, **kwargs)
+
+    def plot_bar_graph(self, df, x, y, color, title, labels):
         """
         Plot a bar graph.
 
         :param df: DataFrame containing data for the graph.
+        :param x: Column name for the x-axis.
+        :param y: Column name for the y-axis.
+        :param color: Column name for color encoding.
+        :param title: Title of the graph.
+        :param labels: Dict of labels for the axes and legend.
         :return: Plotly figure object.
         """
-        fig = px.bar(df, y='incident_category', x='num_of_incidents',
-                     title='Incident Analysis',
-                     labels={'incident_category': 'Incident Category', 'num_of_incidents': 'Number of Incidents'},
-                     text='num_of_incidents',
-                     color='num_of_incidents',
+        fig = px.bar(df, y=y, x=x, title=title, labels=labels, text=x, color=color,
                      color_continuous_scale=px.colors.sequential.Plasma)
 
         fig.update_layout(self.get_shared_layout())
@@ -84,6 +80,39 @@ class QueryPlotter:
         fig.update_layout(xaxis=dict(type='log'))
         return fig
 
+    def plot_scatter_graph(self, df):
+        """
+        Plot a scatter graph.
+
+        :param df: DataFrame containing data for the graph.
+        :return: Plotly figure object.
+        """
+        fig = px.scatter(df, x='latitude', y='longitude',
+                         size='num_of_incidents',
+                         title='Crime Hotspots',
+                         labels={'latitude': 'Latitude', 'longitude': 'Longitude', 'num_of_incidents': 'Number of Incidents'},
+                         color_continuous_scale=px.colors.sequential.Plasma)
+
+        fig.update_layout(self.get_shared_layout())
+        return fig
+
+    def plot_line_graph(self, df):
+        """
+        Plot a line graph.
+
+        :param df: DataFrame containing data for the graph.
+        :return: Plotly figure object.
+        """
+        fig = px.line(df, x='incident_time', y='num_of_incidents',
+                      color='incident_category',
+                      title='Temporal Crime Trends',
+                      labels={'incident_time': 'Time of the day', 'num_of_incidents': 'Number of Incidents',
+                              'incident_category': 'Crime Category'},
+                      template='plotly_white')
+
+        fig.update_layout(self.get_shared_layout())
+        return fig
+
     @staticmethod
     def get_shared_layout():
         """
@@ -100,3 +129,58 @@ class QueryPlotter:
                     uniformtext_mode='hide',
                     template='plotly_white',
                     uirevision='constant')
+
+
+GRAPH_CONFIG = {
+    'incident_analysis': {
+        'label': 'Incident Analysis',
+        'query_func': 'fetch_category_counts',
+        'plot_func': 'plot_bar_graph',
+        'plot_params': {
+            'x': 'num_of_incidents',
+            'y': 'incident_category',
+            'color': 'num_of_incidents',
+            'title': 'Incident Analysis',
+            'labels': {'incident_category': 'Incident Category', 'num_of_incidents': 'Number of Incidents'}
+        }
+    },
+    'resolution_status': {
+        'label': 'Resolution Status Across Crime Categories',
+        'query_func': 'fetch_category_resolution_counts',
+        'plot_func': 'plot_stacked_bar_graph',
+    },
+    'most_frequent_crimes': {
+        'label': 'Most Frequent Crimes',
+        'query_func': 'fetch_most_frequent_crimes',
+        'plot_func': 'plot_bar_graph',
+        'plot_params': {
+            'x': 'num_of_incidents',
+            'y': 'incident_category',
+            'color': 'num_of_incidents',
+            'title': 'Most Frequent Crimes',
+            'labels': {'incident_category': 'Crime Type', 'num_of_incidents': 'Frequency'}
+        }
+    },
+    'crime_hotspots': {
+        'label': 'Crime Hotspots',
+        'query_func': 'fetch_crime_hotspots',
+        'plot_func': 'plot_scatter_graph',
+    },
+    'crime_trends': {
+        'label': 'Temporal Crime Trends',
+        'query_func': 'fetch_crime_trends',
+        'plot_func': 'plot_line_graph',
+    },
+    'district_crimes': {
+        'label': 'Crimes in Specific Districts',
+        'query_func': 'fetch_district_crimes',
+        'plot_func': 'plot_bar_graph',
+        'plot_params': {
+            'x': 'num_of_incidents',
+            'y': 'police_district',
+            'color': 'num_of_incidents',
+            'title': 'Crimes in Specific Districts',
+            'labels': {'police_district': 'Police District', 'num_of_incidents': 'Number of Incidents'}
+        }
+    }
+}

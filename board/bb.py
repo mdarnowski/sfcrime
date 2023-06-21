@@ -7,7 +7,7 @@ import threading
 from dash import dcc, Dash
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
-from utilities.QueryPlotter import QueryPlotter
+from utilities.QueryPlotter import QueryPlotter, GRAPH_CONFIG
 
 app = Flask(__name__)
 dash_app = Dash(__name__, server=app, url_base_pathname='/dashboard/')
@@ -62,11 +62,8 @@ dash_app.layout = dbc.Container([
     dbc.Row([
         dbc.Col([
             dcc.Dropdown(id='graph-dropdown',
-                         options=[
-                             {'label': 'Incident Analysis', 'value': 'bar'},
-                             {'label': 'Resolution Status Across Crime Categories', 'value': 'stacked_bar'}
-                         ],
-                         value='bar',
+                         options=[{'label': cfg['label'], 'value': key} for key, cfg in GRAPH_CONFIG.items()],
+                         value='incident_analysis',
                          clearable=False),
             dcc.Graph(id='incident-graph')
         ], width=12)
@@ -86,13 +83,8 @@ def update_graph(graph_type):
     :param graph_type: Type of graph selected.
     :return: Plotly figure object.
     """
-    db_manager = PostgreSQLManager.get_instance()
-    if graph_type == 'bar':
-        df = db_manager.fetch_category_counts()
-    elif graph_type == 'stacked_bar':
-        df = db_manager.fetch_category_resolution_counts()
     query_plotter = QueryPlotter(graph_type)
-    fig = query_plotter.plot_graph(df)
+    fig = query_plotter.plot_graph()
     return fig
 
 
