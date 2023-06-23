@@ -1,4 +1,3 @@
-from model.SQLAlchemy import Base
 from utilities.PostgreSQLManager import PostgreSQLManager
 
 

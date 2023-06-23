@@ -55,7 +55,7 @@ class QueryPlotter:
         :param labels: Dict of labels for the axes and legend.
         :return: Plotly figure object.
         """
-        hover_data = {k: True for k in df.columns}  # Include all columns as hover data
+        hover_data = {k: True for k in df.columns}
         fig = px.bar(df, y=y, x=x, title=title, labels=labels, text=x, color=color,
                      color_continuous_scale=px.colors.sequential.Plasma, hover_data=hover_data)
 
@@ -91,12 +91,12 @@ class QueryPlotter:
         fig = go.Figure(go.Densitymapbox(
             lat=df['latitude'],
             lon=df['longitude'],
-            z=df['num_of_incidents'],  # this will create a heat map based on the number of incidents
-            radius=20,  # increase the size of the heat map points
-            colorscale='Hot',  # change the color scale to 'Hot'
-            colorbar=dict(thickness=20, ticklen=3),  # customize the colorbar
-            hoverinfo='text',  # this will display the number of incidents when you hover over a point
-            hovertext=df['num_of_incidents'].astype(str) + ' incidents'  # customize the hover text
+            z=df['num_of_incidents'],
+            radius=20,
+            colorscale='Hot',
+            colorbar=dict(thickness=20, ticklen=3),
+            hoverinfo='text',
+            hovertext=df['num_of_incidents'].astype(str) + ' incidents'
         ))
 
         fig.update_layout(
@@ -105,7 +105,6 @@ class QueryPlotter:
             hovermode='closest',
             mapbox=dict(
                 accesstoken='pk.eyJ1IjoiczE2OTQxIiwiYSI6ImNsajVvMG4wMDBjcGYzY3F5OWJjazcxMmgifQ.lCzhgVuM5B6GOufCDaomBw',
-                # replace with your Mapbox access token
                 bearing=0,
                 center=dict(
                     lat=37.7749,  # latitude of San Francisco
@@ -146,9 +145,9 @@ class QueryPlotter:
         :return: Plotly figure object.
         """
 
-        # Convert incident_time to datetime
+        # Convert incident_time to datetime and set it as the index
         df['incident_time'] = pd.to_datetime(df['incident_time'].apply(lambda x: datetime.combine(date.today(), x)))
-        df.set_index('incident_time', inplace=True)  # Set incident_time as the index
+        df.set_index('incident_time', inplace=True)
         grouped_df = df.groupby(['incident_category', pd.Grouper(freq='60T')]).sum().reset_index()
 
         fig = go.Figure()
@@ -253,7 +252,7 @@ GRAPH_CONFIG = {
             'y': 'police_district',
             'color': 'num_of_incidents',
             'title': 'Crimes in Specific Districts',
-            'labels': {'police_district': 'Police District', 'num_of_incidents': 'Number of Incidents','incident_category': 'Incident Category'}
+            'labels': {'police_district': 'Police District', 'num_of_incidents': 'Number of Incidents', 'incident_category': 'Incident Category'}
         }
     },
     'incident_details': {

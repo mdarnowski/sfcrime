@@ -4,8 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text, func, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config.database import db_config
-from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base, LocationDimension, DateDimension, \
-    DistrictDimension, IncidentDetailsDimension
+from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base, LocationDimension, DateDimension, DistrictDimension, IncidentDetailsDimension
 
 
 class PostgreSQLManager:
@@ -104,8 +103,6 @@ class PostgreSQLManager:
         """
         Create tables in the database based on the declarative base model.
         Existing tables will be dropped before creating new ones.
-
-        :param Base: SQLAlchemy declarative base model containing table definitions.
         """
         Base.metadata.drop_all(self.engine)
         Base.metadata.create_all(self.engine)
@@ -114,7 +111,11 @@ class PostgreSQLManager:
         """
         Fetch data for plotting category counts.
 
-        :return: DataFrame containing the result of the query.
+        This method executes a SQL query that groups incidents by category and counts
+        the number of incidents for each category. The result is returned as a DataFrame.
+
+        :return: DataFrame containing the result of the query, which includes 'incident_category'
+                 and 'num_of_incidents' (the count of incidents for each category).
         """
         query = self.Session.query(CategoryDimension.incident_category,
                                    func.count(Incidents.incident_id).label('num_of_incidents')) \
@@ -125,10 +126,14 @@ class PostgreSQLManager:
 
     def fetch_category_resolution_counts(self):
         """
-        Fetch data for plotting category and resolution counts.
+           Fetch data for plotting category and resolution counts.
 
-        :return: DataFrame containing the result of the query.
-        """
+           This method executes a SQL query that groups incidents by category and resolution and counts
+           the number of incidents for each category and resolution. The result is returned as a DataFrame.
+
+           :return: DataFrame containing the result of the query, which includes 'incident_category', 'resolution',
+                    and 'num_of_incidents' (the count of incidents for each category and resolution).
+           """
         query = self.Session.query(CategoryDimension.incident_category,
                                    ResolutionDimension.resolution,
                                    func.count(Incidents.incident_id).label('num_of_incidents')) \
@@ -140,8 +145,17 @@ class PostgreSQLManager:
 
     def fetch_most_frequent_crimes(self, past_days=365):
         """
-        Fetch data for the most frequently occurring types of crimes for the past specified days.
-        """
+            Fetch data for the most frequently occurring types of crimes for the past specified days.
+
+            This method executes a SQL query that groups incidents by category and counts
+            the number of incidents for each category, only considering incidents that happened within
+            the past specified number of days. The result is sorted by the count of incidents in
+            descending order and returned as a DataFrame.
+
+            :param past_days: The number of past days to consider for the query. Defaults to 365.
+            :return: DataFrame containing the result of the query, which includes 'incident_category'
+                     and 'num_of_incidents' (the count of incidents for each category).
+            """
         # Calculate the date for 'past_days' ago
         date_past_days = datetime.datetime.now() - datetime.timedelta(days=past_days)
 
@@ -156,8 +170,15 @@ class PostgreSQLManager:
 
     def fetch_crime_hotspots(self):
         """
-        Fetch data for identifying crime hotspots.
-        """
+           Fetch data for identifying crime hotspots.
+
+           This method executes a SQL query that groups incidents by location and counts
+           the number of incidents for each location. The result is sorted by the count of incidents in
+           descending order and returned as a DataFrame.
+
+           :return: DataFrame containing the result of the query, which includes 'latitude', 'longitude',
+                    and 'num_of_incidents' (the count of incidents for each location).
+           """
         query = self.Session.query(LocationDimension.latitude, LocationDimension.longitude,
                                    func.count(Incidents.incident_id).label('num_of_incidents')) \
             .join(Incidents, Incidents.location_key == LocationDimension.key) \
@@ -167,8 +188,16 @@ class PostgreSQLManager:
 
     def fetch_crime_trends(self):
         """
-        Fetch data for identifying temporal crime trends.
-        """
+           Fetch data for identifying temporal crime trends.
+
+           This method executes a SQL query that groups incidents by time, day of the week,
+           and category, and counts the number of incidents for each combination. The result is sorted by
+           the time and day of the week and returned as a DataFrame.
+
+           :return: DataFrame containing the result of the query, which includes 'incident_time',
+                    'incident_day_of_week', 'incident_category', and 'num_of_incidents'
+                    (the count of incidents for each combination of time, day, and category).
+           """
         query = self.Session.query(DateDimension.incident_time, DateDimension.incident_day_of_week,
                                    CategoryDimension.incident_category,
                                    func.count(Incidents.incident_id).label('num_of_incidents')) \
@@ -181,8 +210,16 @@ class PostgreSQLManager:
 
     def fetch_district_crimes(self):
         """
-        Fetch data for identifying crimes in all districts.
-        """
+           Fetch data for identifying crimes in all districts.
+
+           This method executes a SQL query that groups incidents by district and category, and counts
+           the number of incidents for each combination. The result is sorted by the count of incidents
+           in descending order and returned as a DataFrame.
+
+           :return: DataFrame containing the result of the query, which includes 'police_district',
+                    'incident_category', and 'num_of_incidents' (the count of incidents for each combination
+                    of district and category).
+           """
         query = self.Session.query(DistrictDimension.police_district,
                                    CategoryDimension.incident_category,
                                    func.count(Incidents.incident_id).label('num_of_incidents')) \
@@ -195,6 +232,13 @@ class PostgreSQLManager:
     def fetch_incident_details(self):
         """
         Fetch data for analyzing incident details.
+
+        This method executes a SQL query that groups incidents by description and counts
+        the number of incidents for each description. The result is sorted by the count of incidents
+        in descending order and returned as a DataFrame.
+
+        :return: DataFrame containing the result of the query, which includes 'incident_description'
+                 and 'num_of_incidents' (the count of incidents for each description).
         """
         query = self.Session.query(IncidentDetailsDimension.incident_description,
                                    func.count(Incidents.incident_id).label('num_of_incidents')) \
