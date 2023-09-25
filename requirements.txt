@@ -1,0 +1,6 @@
+dash==2.7.0
+dash_bootstrap_components==1.4.1
+Flask==2.3.2
+pandas==2.0.0
+plotly==5.9.0
+SQLAlchemy==1.4.39
