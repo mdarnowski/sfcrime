@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 from sqlalchemy import create_engine, text, func, desc
 from sqlalchemy.orm import sessionmaker, scoped_session
-from config.database import db_config
+from config.db_config import db_config
 from model.SQLAlchemy import CategoryDimension, Incidents, ResolutionDimension, Base, LocationDimension, DateDimension, DistrictDimension, IncidentDetailsDimension
 
 
