@@ -7,14 +7,20 @@ from datetime import datetime, date
 
 
 class QueryPlotter:
-    def __init__(self, graph_type):
+    def __init__(self, graph_type, db_type=1):
         """
         Initialize the QueryPlotter object with graph_type.
 
         :param graph_type: Type of graph ('bar' or 'stacked_bar').
         """
         self.graph_config = GRAPH_CONFIG[graph_type]
-        self.db_manager2 = CassandraManager.get_instance()
+
+        if db_type is 0:
+            self.db_manager = PostgreSQLManager.get_instance()
+        elif db_type is 1:
+            self.db_manager = CassandraManager.get_instance()
+        else:
+            raise Exception('db_type not supported')
 
     def plot_graph(self):
         """
@@ -42,7 +48,7 @@ class QueryPlotter:
 
         :return: DataFrame containing the result of the query.
         """
-        return getattr(self.db_manager2, self.graph_config['query_func'])(*args, **kwargs)
+        return getattr(self.db_manager, self.graph_config['query_func'])(*args, **kwargs)
 
     def plot_bar_graph(self, df, x, y, color, title, labels):
         """

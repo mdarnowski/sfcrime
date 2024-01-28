@@ -2,8 +2,12 @@
     Database configuration
 """
 db_config = {
-    "contact_points": ["192.168.1.104"],  # IP address of your Docker Cassandra instance
-    "port": 9042,  # Default Cassandra port
-    "keyspace": "sfcrime"  # Replace with your actual keyspace name
+    "pg_host": "127.0.0.1",
+    "pg_port": "27017",
+    "pg_dbname": "crime_data_sf",
+
+    "contact_points": ["127.0.0.1"],
+    "casandra_port": 9042,
+    "casandra_keyspace": "sfcrime_keyspace"
 }
 
