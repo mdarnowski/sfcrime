@@ -1,3 +1,5 @@
+import time
+
 import pandas as pd
 import queue
 from concurrent.futures import ThreadPoolExecutor
@@ -50,17 +52,15 @@ class CassandraBatchInserter(metaclass=Singleton):
 
     def prepare_data(self):
         df = DataLoader.get_instance().load_data()
-        df['incident_datetime'] = pd.to_datetime(df['incident_datetime'])
-        df['report_datetime'] = pd.to_datetime(df['report_datetime'])
-        df['incident_time'] = pd.to_datetime(df['incident_time'])
-        df['incident_year'] = df['incident_year'].astype(int)
-        df['incident_code'] = df['incident_code'].astype(int)
-        df['incident_number'] = df['incident_number'].astype(int)
-        df['latitude'] = df['latitude'].astype(float)
-        df['longitude'] = df['longitude'].astype(float)
-        df['incident_id'] = [uuid4() for _ in range(len(df))]
+        datetime_cols = ['incident_datetime', 'report_datetime']
+        df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime, errors='coerce')
+        # Converting data types for numeric columns
+        int_cols = ['incident_year', 'incident_number', 'cad_number', 'cnn']
+        df[int_cols] = df[int_cols].apply(pd.to_numeric, downcast='integer', errors='coerce')
+        # Float columns
+        float_cols = ['latitude', 'longitude']
+        df[float_cols] = df[float_cols].apply(pd.to_numeric, downcast='float', errors='coerce')
         self.df = df
-
         self.batches = create_batches(df)
 
     def insert_one_batch(self):
@@ -74,7 +74,7 @@ class CassandraBatchInserter(metaclass=Singleton):
             incident = IncidentDetails(
                 row['incident_datetime'],
                 row['incident_year'],
-                row['incident_time'],
+                row['incident_datetime'],
                 row['incident_day_of_week'],
                 row['report_datetime'],
                 row['incident_category'],
@@ -138,8 +138,8 @@ class InsertTask(metaclass=Singleton):
             self.total_rows_added += batch_rows_added
             self.progress = (current_batch / self.total_batches) * 100
             success, batch_rows_added = self.inserter.insert_one_batch()
-
-        self.inserter.await_insertion_completion()
+            print(f"Batch {current_batch} inserted. {self.total_rows_added} rows added.")
+        print(f"Insertion completed")
         self.running = False
         print(f"Insertion completed. {self.total_rows_added} rows added.")
 
