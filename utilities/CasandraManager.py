@@ -21,11 +21,12 @@ def fetch_category_resolution_counts(session):
 
 def fetch_most_frequent_crimes(session, past_days=365):
     past_date = datetime.datetime.now() - datetime.timedelta(days=past_days)
-    query = "SELECT incident_category, incident_datetime FROM IncidentDetails WHERE incident_datetime >= %s"
+    # Add "ALLOW FILTERING" at the end of the query
+    query = "SELECT incident_category FROM IncidentDetails WHERE incident_datetime >= %s ALLOW FILTERING"
     result = session.execute(query, [past_date])
-    df = pd.DataFrame(list(result), columns=['incident_category', 'incident_datetime'])
-    return df['incident_category'].value_counts().reset_index(name='num_of_incidents').rename(
-        columns={'index': 'incident_category'})
+    df = pd.DataFrame(list(result), columns=['incident_category'])
+    return df['incident_category'].value_counts().reset_index(name='num_of_incidents').rename(columns={'index': 'incident_category'})
+
 
 
 def fetch_crime_hotspots(session):
@@ -60,4 +61,4 @@ def fetch_incident_details(session):
 cluster = Cluster(['127.0.0.1'])  # Replace with your cluster's IPs and authentication
 s = cluster.connect('sfcrime_keyspace')
 
-print(fetch_incident_details(s))
+print(fetch_most_frequent_crimes(s))
