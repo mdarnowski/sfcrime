@@ -102,10 +102,22 @@ class CassandraManager:
         return df.groupby(['latitude', 'longitude']).size().reset_index(name='num_of_incidents')
 
     def fetch_crime_trends(self):
-        query = "SELECT incident_day_of_week, incident_category FROM IncidentDetails"
+        # Fetch only the necessary columns
+        query = "SELECT incident_day_of_week, incident_category, incident_time FROM IncidentDetails"
         result = self.session.execute(query)
-        df = pd.DataFrame(list(result), columns=['incident_day_of_week', 'incident_category'])
-        return df.groupby(['incident_day_of_week', 'incident_category']).size().reset_index(name='num_of_incidents')
+        df = pd.DataFrame(list(result), columns=['incident_day_of_week', 'incident_category', 'incident_time'])
+
+        # Convert 'incident_time' to just the time part if it's a datetime object
+        df['incident_time'] = df['incident_time'].dt.time
+
+        # Group by 'incident_day_of_week', 'incident_category', and 'incident_time', and count occurrences
+        trends_df = df.groupby(['incident_day_of_week', 'incident_category', 'incident_time']).size().reset_index(
+            name='num_of_incidents')
+
+        # Sort the results by 'incident_time' and 'incident_day_of_week'
+        sorted_df = trends_df.sort_values(by=['incident_time', 'incident_day_of_week'])
+
+        return sorted_df
 
     def fetch_district_crimes(self):
         query = "SELECT police_district, incident_category FROM IncidentDetails"
