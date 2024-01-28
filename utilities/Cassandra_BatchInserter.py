@@ -20,10 +20,16 @@ class Singleton(type):
         return cls._instances[cls]
 
 
+def create_batches(df, batch_size=100):
+    for start in range(0, len(df), batch_size):
+        yield df.iloc[start:start + batch_size]
+
+
 class CassandraBatchInserter(metaclass=Singleton):
     """Handles batch insertion into a Cassandra database."""
 
     def __init__(self):
+        self.df = None
         self.insert_queue = queue.Queue()
         self.thread_count = 5
         self.executor = ThreadPoolExecutor(max_workers=self.thread_count)
@@ -42,7 +48,7 @@ class CassandraBatchInserter(metaclass=Singleton):
             corm.insert(batch)
             self.insert_queue.task_done()
 
-    def prepare_data(self, filepath):
+    def prepare_data(self):
         df = DataLoader.get_instance().load_data()
         df['incident_datetime'] = pd.to_datetime(df['incident_datetime'])
         df['report_datetime'] = pd.to_datetime(df['report_datetime'])
@@ -55,11 +61,7 @@ class CassandraBatchInserter(metaclass=Singleton):
         df['incident_id'] = [uuid4() for _ in range(len(df))]
         self.df = df
 
-        self.batches = self.create_batches(df)
-
-def create_batches(self, df, batch_size=100):
-        for start in range(0, len(df), batch_size):
-            yield df.iloc[start:start + batch_size]
+        self.batches = create_batches(df)
 
     def insert_one_batch(self):
         try:
@@ -94,7 +96,7 @@ def create_batches(self, df, batch_size=100):
         return True, len(insert_batch)
 
     def run_insertion(self):
-        self.prepare_data('../data/crime_sf.csv')
+        self.prepare_data()
         success, count = self.insert_one_batch()
         while success:
             success, count = self.insert_one_batch()
@@ -120,9 +122,9 @@ class InsertTask(metaclass=Singleton):
         self.progress = 0
         self.running = False
 
-    def run(self, filepath):
+    def run(self):
         self.running = True
-        self.inserter.prepare_data(filepath)
+        self.inserter.prepare_data()
 
         # Now the inserter has the 'df' attribute after prepare_data is called
         self.total_batches = -(-len(self.inserter.df) // 100)  # Calculate the total number of batches
@@ -141,5 +143,6 @@ class InsertTask(metaclass=Singleton):
         self.running = False
         print(f"Insertion completed. {self.total_rows_added} rows added.")
 
+
 task = InsertTask()
-task.run('../data/crime_sf.csv')
+task.run()
