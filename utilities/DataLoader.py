@@ -59,6 +59,6 @@ class DataLoader:
 
         :return: DataFrame containing the data from the CSV file.
         """
-        df = pd.read_csv(DataLoader.__file_path)
+        df = pd.read_csv(DataLoader.__file_path,nrows=100000)
         df.columns = df.columns.str.replace(' ', '_').str.lower()
         return df.where(pd.notnull(df), None)

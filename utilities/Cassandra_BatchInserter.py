@@ -49,7 +49,7 @@ class CassandraBatchInserter(metaclass=Singleton):
 
     def prepare_data(self):
         df = DataLoader.get_instance().load_data()
-        datetime_cols = ['incident_datetime', 'report_datetime']
+        datetime_cols = ['incident_datetime', 'report_datetime', 'incident_time']
         df[datetime_cols] = df[datetime_cols].apply(pd.to_datetime, errors='coerce')
         # Converting data types for numeric columns
         int_cols = ['incident_year', 'incident_number', 'cad_number', 'cnn']
@@ -59,6 +59,7 @@ class CassandraBatchInserter(metaclass=Singleton):
         df[float_cols] = df[float_cols].apply(pd.to_numeric, downcast='float', errors='coerce')
         self.df = df
         self.batches = create_batches(df)
+        print(self.batches)
 
     def insert_one_batch(self):
         try:
@@ -71,7 +72,7 @@ class CassandraBatchInserter(metaclass=Singleton):
             incident = IncidentDetails(
                 row['incident_datetime'],
                 row['incident_year'],
-                row['incident_datetime'],
+                row['incident_time'],
                 row['incident_day_of_week'],
                 row['report_datetime'],
                 row['incident_category'],
@@ -85,6 +86,7 @@ class CassandraBatchInserter(metaclass=Singleton):
                 row['longitude'],
                 row['resolution'],
             )
+            print(incident)
             insert_batch.append(incident)
 
         if insert_batch:
@@ -120,6 +122,8 @@ class InsertTask(metaclass=Singleton):
         self.running = False
 
     def run(self):
+        corm.register_table(IncidentDetails)
+        corm.sync_schema()
         self.running = True
         self.inserter.prepare_data()
 
@@ -137,6 +141,7 @@ class InsertTask(metaclass=Singleton):
             success, batch_rows_added = self.inserter.insert_one_batch()
             print(f"Batch {current_batch} inserted. {self.total_rows_added} rows added.")
 
+        self.inserter.await_insertion_completion()
         print(f"Insertion completed")
         self.running = False
         print(f"Insertion completed. {self.total_rows_added} rows added.")

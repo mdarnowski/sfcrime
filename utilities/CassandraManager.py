@@ -4,6 +4,8 @@ import pandas as pd
 import datetime
 import os
 
+from cassandra.policies import DCAwareRoundRobinPolicy
+
 from model.Incidents_Cassandra import IncidentDetails
 
 os.environ['CLUSTER_IPS'] = '127.0.0.1'
@@ -37,7 +39,9 @@ class CassandraManager:
             raise Exception("This class is a singleton!")
         else:
             CassandraManager.__instance = self
-            self.cluster = Cluster(['127.0.0.1'])  # Replace with your cluster's IPs and authentication
+            corm.register_table(IncidentDetails)
+            corm.sync_schema()
+            self.cluster = Cluster(['127.0.0.1']) # Replace with your cluster's IPs and authentication
             self.session = self.cluster.connect('sfcrime_keyspace')
 
     def drop_all_data(self):
