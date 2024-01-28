@@ -89,6 +89,20 @@
             };
         }
 
+        function setDatabase() {
+            var dbType = $("#db-select").val();
+            $.ajax({
+                url: '/set_db',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ db_type: dbType }),
+                success: function(response) {
+                    alert(response.message);
+                }
+            });
+        }
+
+
         $(document).ready(function() {
             startEventSource();
 
@@ -127,10 +141,25 @@
                     }
                 });
             });
+
+            $("#db-select").on("change", function() {
+                setDatabase();
+            });
+
+            setDatabase();
         });
     </script>
 </head>
 <body>
+    <div class="db-selection">
+        <label for="db-select">Choose Database:</label>
+        <select id="db-select">
+            <option value="0">PostgreSQL</option>
+            <option value="1">Cassandra</option>
+        </select>
+    </div>
+
+
     <div class="progress-bar">
         <div class="fill"></div>
     </div>

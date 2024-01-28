@@ -1,7 +1,9 @@
 from dash.dcc import Loading
 from dash.exceptions import PreventUpdate
-from flask import Flask, render_template, jsonify, Response
+from flask import Flask, render_template, jsonify, Response, request
 from utilities.PostgreSQL_BatchInserter import InsertTask, ActionLock
+from utilities.Cassandra_BatchInserter import InsertTask as CassandraInsertTask
+
 from utilities.PostgreSQLManager import PostgreSQLManager
 import json
 import time
@@ -11,6 +13,8 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 from utilities.QueryPlotter import QueryPlotter, GRAPH_CONFIG
 
+current_db = 0
+
 
 def create_app():
     app = Flask(__name__)
@@ -18,6 +22,13 @@ def create_app():
     app.template_folder = 'templates'
     action_lock = ActionLock()
     task = InsertTask()
+    cassandra_task = CassandraInsertTask()
+
+    @app.route('/set_db', methods=['POST'])
+    def set_db():
+        global current_db
+        current_db = int(request.json.get('db_type', 0))
+        return jsonify({"message": f"Database set to {'PostgreSQL' if current_db == 0 else 'Cassandra'}"}), 200
 
     @app.route('/')
     def index():
@@ -37,16 +48,12 @@ def create_app():
 
     @app.route('/insert_batches', methods=['POST'])
     def handle_insert_batches():
-        """
-        Handle requests to start batch insertion into the database.
-
-        If no other task is currently running, this function starts a new thread for batch insertion into the database.
-
-        :return: JSON response with a success message and HTTP status 202 if batch insertion has started,
-                 or JSON response with an error message and HTTP status 503 if another task is running.
-        """
+        global current_db
         if not action_lock.is_locked() and not task.running:
-            action_lock.perform(lambda: threading.Thread(target=task.run).start())
+            if current_db == 0:
+                action_lock.perform(lambda: threading.Thread(target=task.run).start())  # PostgreSQL task
+            else:
+                action_lock.perform(lambda: threading.Thread(target=cassandra_task.run).start())  # Cassandra task
             return jsonify({"message": "Batch Insertion started"}), 202
         return another_db_process_msg()
 
@@ -86,16 +93,20 @@ def create_app():
     def stream_updates():
         """
         Stream updates about the task progress to the client.
-
         This function generates a server-sent event stream that sends updates about the task progress to the client.
-
         :return: Server-sent event stream response.
         """
 
         def generate():
             while True:
-                yield f"data:{json.dumps({'total_rows_added': task.total_rows_added, 'progress': task.progress})}\n\n"
-                if not task.running:
+                if current_db == 0:
+                    progress_data = {'total_rows_added': task.total_rows_added, 'progress': task.progress}
+                else:
+                    progress_data = {'total_rows_added': cassandra_task.total_rows_added,
+                                     'progress': cassandra_task.progress}
+
+                yield f"data:{json.dumps(progress_data)}\n\n"
+                if (current_db == 0 and not task.running) or (current_db == 1 and not cassandra_task.running):
                     break
                 time.sleep(1)
 
@@ -169,4 +180,5 @@ def create_app():
 
         query_plotter = QueryPlotter(graph_type, db_type)
         return query_plotter.plot_graph()
+
     return app

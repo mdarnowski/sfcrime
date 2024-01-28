@@ -139,10 +139,8 @@ class InsertTask(metaclass=Singleton):
             self.progress = (current_batch / self.total_batches) * 100
             success, batch_rows_added = self.inserter.insert_one_batch()
             print(f"Batch {current_batch} inserted. {self.total_rows_added} rows added.")
+
         print(f"Insertion completed")
         self.running = False
         print(f"Insertion completed. {self.total_rows_added} rows added.")
 
-
-task = InsertTask()
-task.run()
