@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from uuid import uuid4
 import os
+
 os.environ['CLUSTER_IPS'] = '127.0.0.1'
 import corm
 from model.incidents_cas import IncidentDetails  # Replace with the actual file name
@@ -29,8 +30,6 @@ csv_columns = [
 df = pd.read_csv('../data/crime_sf.csv', usecols=csv_columns)
 df['Incident Datetime'] = pd.to_datetime(df['Incident Datetime'])
 df['Report Datetime'] = pd.to_datetime(df['Report Datetime'])
-df['Incident Date'] = pd.to_datetime(df['Incident Date']).dt.date
-df['Incident Time'] = pd.to_datetime(df['Incident Time'], format='%H:%M').dt.time
 df['Incident Year'] = df['Incident Year'].astype(int)
 df['Incident Code'] = df['Incident Code'].astype(int)
 df['Incident Number'] = df['Incident Number'].astype(int)
@@ -38,19 +37,15 @@ df['Latitude'] = df['Latitude'].astype(float)
 df['Longitude'] = df['Longitude'].astype(float)
 df['Incident ID'] = [uuid4() for _ in range(len(df))]  # Generate UUIDs
 
-
 # Fill missing values in all columns with appropriate values
 # You can replace 'your_default_value' with the value you want to use for missing data
 default_value = np.NAN
 df.fillna(default_value, inplace=True)
 
+batch_size = 100  # You can adjust the batch size as needed
+insert_batch = []
 i = 0
-list = []
-# Insert data into Cassandra
 for index, row in df.iterrows():
-    print("Inserting row", i)
-    print(row)
-    i += 1
     incident = IncidentDetails(
         row['Incident Datetime'],
         row['Incident Year'],
@@ -68,9 +63,17 @@ for index, row in df.iterrows():
         row['Resolution'],
     )
 
-    list.append(incident)
+    insert_batch.append(incident)
 
-corm.insert(list)
+    if len(insert_batch) >= batch_size:
+        i += 1
+        # Insert the batch into Cassandra
+        print(i * 100)
+        corm.insert(insert_batch)
+        insert_batch = []
 
+# Insert any remaining rows
+if insert_batch:
+    corm.insert(insert_batch)
 
 print("Data insertion completed.")
