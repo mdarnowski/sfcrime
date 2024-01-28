@@ -1,6 +1,8 @@
 from dash.dcc import Loading
 from dash.exceptions import PreventUpdate
 from flask import Flask, render_template, jsonify, Response, request
+
+from utilities.CassandraManager import CassandraManager
 from utilities.PostgreSQL_BatchInserter import InsertTask, ActionLock
 from utilities.Cassandra_BatchInserter import InsertTask as CassandraInsertTask
 
@@ -67,9 +69,13 @@ def create_app():
         :return: JSON response with a success message and HTTP status 202 if database creation has started,
                  or JSON response with an error message and HTTP status 503 if another task is running.
         """
+        global current_db
         if not action_lock.is_locked() and not task.running:
-            action_lock.perform(
-                lambda: PostgreSQLManager.get_instance().create_database())
+            if current_db == 0:
+                action_lock.perform(lambda: PostgreSQLManager.get_instance().create_database())
+            else:
+                action_lock.perform(lambda: CassandraManager.get_instance().create_database())
+
             return jsonify({"message": "Database creation started"}), 202
         return another_db_process_msg()
 
@@ -83,9 +89,12 @@ def create_app():
         :return: JSON response with a success message and HTTP status 202 if table recreation has started,
                  or JSON response with an error message and HTTP status 503 if another task is running.
         """
+        global current_db
         if not action_lock.is_locked() and not task.running:
-            action_lock.perform(
-                lambda: PostgreSQLManager.get_instance().recreate_tables())
+            if current_db == 0:
+                action_lock.perform(lambda: PostgreSQLManager.get_instance().recreate_tables())
+            else:
+                action_lock.perform(lambda: CassandraManager.get_instance().recreate_tables())
             return jsonify({"message": "Table recreation started"}), 202
         return another_db_process_msg()
 
