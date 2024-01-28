@@ -35,6 +35,25 @@ class CassandraManager:
             self.cluster = Cluster(['127.0.0.1'])  # Replace with your cluster's IPs and authentication
             self.session = self.cluster.connect('sfcrime_keyspace')
 
+    def drop_all_data(self):
+        """
+        Drops all tables in the specified keyspace. This action is irreversible.
+        """
+        # Fetching all table names in the keyspace
+        query = "SELECT table_name FROM system_schema.tables WHERE keyspace_name = %s"
+        result = self.session.execute(query, ['sfcrime_keyspace'])
+
+        # Dropping each table
+        for row in result:
+            drop_query = f"DROP TABLE IF EXISTS sfcrime_keyspace.{row.table_name}"
+            try:
+                self.session.execute(drop_query)
+                print(f"Dropped table: {row.table_name}")
+            except Exception as e:
+                print(f"Error dropping table {row.table_name}: {str(e)}")
+
+        print("All tables dropped.")
+
     def fetch_category_counts(self):
         query = "SELECT incident_category FROM IncidentDetails"
         result = self.session.execute(query)

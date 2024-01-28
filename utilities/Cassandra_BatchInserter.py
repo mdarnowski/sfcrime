@@ -6,7 +6,7 @@ import os
 
 os.environ['CLUSTER_IPS'] = '127.0.0.1'
 import corm
-from model.Incidents_Cassandra import IncidentDetails  # Replace with the actual file name
+from model.Incidents_Cassandra import IncidentDetails
 
 # Database Configuration
 
@@ -30,6 +30,7 @@ csv_columns = [
 df = pd.read_csv('../data/crime_sf.csv', usecols=csv_columns)
 df['Incident Datetime'] = pd.to_datetime(df['Incident Datetime'])
 df['Report Datetime'] = pd.to_datetime(df['Report Datetime'])
+df['Incident Time'] = pd.to_datetime(df['Incident Time'])
 df['Incident Year'] = df['Incident Year'].astype(int)
 df['Incident Code'] = df['Incident Code'].astype(int)
 df['Incident Number'] = df['Incident Number'].astype(int)
@@ -49,6 +50,7 @@ for index, row in df.iterrows():
     incident = IncidentDetails(
         row['Incident Datetime'],
         row['Incident Year'],
+        row['Incident Time'],
         row['Incident Day of Week'],
         row['Report Datetime'],
         row['Incident Category'],
