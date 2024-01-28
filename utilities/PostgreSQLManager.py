@@ -86,7 +86,7 @@ class PostgreSQLManager:
         """
         Create a new database in PostgreSQL if it doesn't already exist.
         """
-        self.connect(default_db=True)  # Connect to default 'postgres' database to check if desired database exists
+        self.connect(default_db=True)
 
         query = text("SELECT 1 FROM pg_database WHERE datname = :dbname")
         result_proxy = self.Session.execute(query, {"dbname": self.dbname})
