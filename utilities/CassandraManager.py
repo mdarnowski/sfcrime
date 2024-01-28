@@ -2,7 +2,12 @@ from cassandra.cluster import Cluster
 from cassandra.auth import PlainTextAuthProvider
 import pandas as pd
 import datetime
+import os
 
+from model.Incidents_Cassandra import IncidentDetails
+
+os.environ['CLUSTER_IPS'] = '127.0.0.1'
+import corm
 
 class CassandraManager:
     """
@@ -54,6 +59,15 @@ class CassandraManager:
 
         print("All tables dropped.")
 
+    def create_database(self):
+        self.drop_all_data()
+        corm.register_table(IncidentDetails)
+        corm.sync_schema()
+
+    def recreate_tables(self):
+        self.drop_all_data()
+        corm.register_table(IncidentDetails)
+        corm.sync_schema()
     def fetch_category_counts(self):
         query = "SELECT incident_category FROM IncidentDetails"
         result = self.session.execute(query)
