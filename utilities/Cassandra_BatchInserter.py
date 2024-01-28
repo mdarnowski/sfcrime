@@ -6,7 +6,7 @@ import os
 
 os.environ['CLUSTER_IPS'] = '127.0.0.1'
 import corm
-from model.incidents_cas import IncidentDetails  # Replace with the actual file name
+from model.Incidents_Cassandra import IncidentDetails  # Replace with the actual file name
 
 # Database Configuration
 

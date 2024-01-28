@@ -1,5 +1,5 @@
 from flask import Flask, render_template, jsonify, Response
-from utilities.BatchInserter import InsertTask, ActionLock
+from utilities.PostgreSQL_BatchInserter import InsertTask, ActionLock
 from utilities.PostgreSQLManager import PostgreSQLManager
 import json
 import time

@@ -2,6 +2,7 @@ import pandas as pd
 from plotly import express as px
 import plotly.graph_objects as go
 from utilities.PostgreSQLManager import PostgreSQLManager
+from utilities.CassandraManager import CassandraManager
 from datetime import datetime, date
 
 
@@ -13,7 +14,7 @@ class QueryPlotter:
         :param graph_type: Type of graph ('bar' or 'stacked_bar').
         """
         self.graph_config = GRAPH_CONFIG[graph_type]
-        self.db_manager = PostgreSQLManager.get_instance()
+        self.db_manager2 = CassandraManager.get_instance()
 
     def plot_graph(self):
         """
@@ -41,7 +42,7 @@ class QueryPlotter:
 
         :return: DataFrame containing the result of the query.
         """
-        return getattr(self.db_manager, self.graph_config['query_func'])(*args, **kwargs)
+        return getattr(self.db_manager2, self.graph_config['query_func'])(*args, **kwargs)
 
     def plot_bar_graph(self, df, x, y, color, title, labels):
         """
