@@ -1,3 +1,5 @@
+from dash.dcc import Loading
+from dash.exceptions import PreventUpdate
 from flask import Flask, render_template, jsonify, Response
 from utilities.PostgreSQL_BatchInserter import InsertTask, ActionLock
 from utilities.PostgreSQLManager import PostgreSQLManager
@@ -103,12 +105,25 @@ def create_app():
     dash_app.layout = dbc.Container([
         dbc.Row([
             dbc.Col([
+                dcc.Dropdown(id='db-type-dropdown',
+                             options=[
+                                 {'label': 'SQL Database', 'value': 0},
+                                 {'label': 'Cassandra Database', 'value': 1}
+                             ],
+                             value=1,  # Default value
+                             clearable=False,
+                             style={'width': '50%', 'marginBottom': '20px'}
+                             ),
                 dcc.Dropdown(id='graph-dropdown',
                              options=[{'label': cfg['label'], 'value': key}
                                       for key, cfg in GRAPH_CONFIG.items()],
                              value='crime_hotspots',
                              clearable=False),
-                dcc.Graph(id='incident-graph'),
+                Loading(
+                    id="loading-1",
+                    type="default",
+                    children=dcc.Graph(id="incident-graph")  # Include dcc.Graph here
+                ),
                 html.A(
                     html.Button(
                         'Initialization menu',
@@ -138,19 +153,20 @@ def create_app():
 
     @dash_app.callback(
         Output('incident-graph', 'figure'),
-        Input('graph-dropdown', 'value')
+        [Input('graph-dropdown', 'value'),
+         Input('db-type-dropdown', 'value')]
     )
-    def update_graph(graph_type):
+    def update_graph(graph_type, db_type):
         """
         Update the graph based on the dropdown selection.
 
-        This function is a Dash callback that gets triggered when the value of the dropdown changes. It updates the
-        graph based on the selected value.
-
+        :param db_type: type of database: 0 - postgres-sql, 1 - cassandra
         :param graph_type: Type of graph selected in the dropdown.
         :return: Plotly figure object for the selected graph type.
         """
-        query_plotter = QueryPlotter(graph_type)
-        return query_plotter.plot_graph()
+        if graph_type is None or db_type is None:
+            raise PreventUpdate
 
+        query_plotter = QueryPlotter(graph_type, db_type)
+        return query_plotter.plot_graph()
     return app

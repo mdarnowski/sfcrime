@@ -35,11 +35,11 @@ class PostgreSQLManager:
             raise Exception("This class is a singleton!")
         else:
             PostgreSQLManager.__instance = self
-            self.user = db_config['user']
-            self.password = db_config['password']
-            self.host = db_config['host']
-            self.port = db_config['port']
-            self.dbname = db_config['dbname']
+            self.user = db_config['pg_user']
+            self.password = db_config['pg_password']
+            self.host = db_config['pg_host']
+            self.port = db_config['pg_port']
+            self.dbname = db_config['pg_dbname']
             self.engine = None
             self.Session = scoped_session(sessionmaker())
             self.connect()
