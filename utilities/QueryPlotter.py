@@ -15,9 +15,9 @@ class QueryPlotter:
         """
         self.graph_config = GRAPH_CONFIG[graph_type]
 
-        if db_type is 0:
+        if db_type == 0:
             self.db_manager = PostgreSQLManager.get_instance()
-        elif db_type is 1:
+        elif db_type == 1:
             self.db_manager = CassandraManager.get_instance()
         else:
             raise Exception('db_type not supported')
