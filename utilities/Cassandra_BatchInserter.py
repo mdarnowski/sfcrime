@@ -1,9 +1,9 @@
-import numpy as np
 import pandas as pd
 import os
 import threading
 import queue
 from uuid import uuid4
+from utilities.DataLoader import DataLoader
 
 os.environ['CLUSTER_IPS'] = '127.0.0.1'
 import corm
@@ -44,52 +44,38 @@ class Cassandra_BatchInserter:
             self.insert_queue.task_done()
 
     def insertData(self):
-        csv_columns = [
-            "Incident Datetime", "Incident Date", "Incident Time", "Incident Year",
-            "Incident Day of Week", "Report Datetime", "Row ID", "Incident ID", "Incident Number",
-            "CAD Number", "Report Type Code", "Report Type Description", "Filed Online", "Incident Code",
-            "Incident Category", "Incident Subcategory", "Incident Description", "Resolution", "Intersection",
-            "CNN", "Police District", "Analysis Neighborhood", "Supervisor District",
-            "Supervisor District 2012", "Latitude", "Longitude", "Point", "Neighborhoods",
-            "ESNCAG - Boundary File", "Central Market/Tenderloin Boundary Polygon - Updated",
-            "Civic Center Harm Reduction Project Boundary", "HSOC Zones as of 2018-06-05",
-            "Invest In Neighborhoods (IIN) Areas", "Current Supervisor Districts", "Current Police Districts"
-        ]
-
-        df = pd.read_csv('../data/crime_sf.csv', usecols=csv_columns)
-        df['Incident Datetime'] = pd.to_datetime(df['Incident Datetime'])
-        df['Report Datetime'] = pd.to_datetime(df['Report Datetime'])
-        df['Incident Time'] = pd.to_datetime(df['Incident Time'])
-        df['Incident Year'] = df['Incident Year'].astype(int)
-        df['Incident Code'] = df['Incident Code'].astype(int)
-        df['Incident Number'] = df['Incident Number'].astype(int)
-        df['Latitude'] = df['Latitude'].astype(float)
-        df['Longitude'] = df['Longitude'].astype(float)
-        df['Incident ID'] = [uuid4() for _ in range(len(df))]
-
-        default_value = np.NAN
-        df.fillna(default_value, inplace=True)
 
         batch_size = 100
         insert_batch = []
 
+        df = DataLoader.get_instance().load_data()
+        df['incident_datetime'] = pd.to_datetime(df['incident_datetime'])
+        df['report_datetime'] = pd.to_datetime(df['report_datetime'])
+        df['incident_time'] = pd.to_datetime(df['incident_time'])
+        df['incident_year'] = df['incident_year'].astype(int)
+        df['incident_code'] = df['incident_code'].astype(int)
+        df['incident_number'] = df['incident_number'].astype(int)
+        df['latitude'] = df['latitude'].astype(float)
+        df['longitude'] = df['longitude'].astype(float)
+        df['incident_id'] = [uuid4() for _ in range(len(df))]
+
         for index, row in df.iterrows():
             incident = IncidentDetails(
-                row['Incident Datetime'],
-                row['Incident Year'],
-                row['Incident Time'],
-                row['Incident Day of Week'],
-                row['Report Datetime'],
-                row['Incident Category'],
-                row['Incident Subcategory'],
-                row['Incident Code'],
-                row['Police District'],
-                row['Analysis Neighborhood'],
-                row['Incident Number'],
-                row['Incident Description'],
-                row['Latitude'],
-                row['Longitude'],
-                row['Resolution'],
+                row['incident_datetime'],
+                row['incident_year'],
+                row['incident_time'],
+                row['incident_day_of_week'],
+                row['report_datetime'],
+                row['incident_category'],
+                row['incident_subcategory'],
+                row['incident_code'],
+                row['police_district'],
+                row['analysis_neighborhood'],
+                row['incident_number'],
+                row['incident_description'],
+                row['latitude'],
+                row['longitude'],
+                row['resolution'],
             )
 
             insert_batch.append(incident)
